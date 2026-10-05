@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.5.1
+// @version      0.5.2
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -13,7 +13,6 @@
 (() => {
   "use strict";
 
-  const SITE_EAN = "3020180368049";
   const STORAGE_MARGIN = "dynaprix-margin";
   const STORAGE_HISTORY = "dynaprix-history";
   let product = null;
@@ -21,6 +20,24 @@
   const euro = n => Number(n).toLocaleString("fr-FR", {
     style: "currency", currency: "EUR"
   });
+
+  function getSiteEan() {
+    const matches = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && /^dynacad\|[^|]+\|current_store$/.test(key)) {
+        let value = localStorage.getItem(key);
+        if (!value) continue;
+        try { value = JSON.parse(value); } catch (_) {}
+        value = String(value).replace(/^"|"$/g, "").trim();
+        if (/^\d{8,14}$/.test(value)) matches.push({ key, value });
+      }
+    }
+    if (!matches.length) {
+      throw new Error("Magasin Dynacad non détecté. Sélectionnez un magasin dans Dynacad puis réessayez.");
+    }
+    return matches[0].value;
+  }
 
   function getCookie(name) {
     const row = document.cookie.split("; ").find(r => r.startsWith(name + "="));
@@ -54,7 +71,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.5.1 • 05/10/2026 19h53</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.5.2 • 05/10/2026 20h12</span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -372,8 +389,9 @@
       if (!/^\d{8,14}$/.test(ean)) throw new Error("EAN invalide.");
       const token = await authenticate();
 
+      const siteEan = getSiteEan();
       const payload = {
-        siteEan:SITE_EAN, pageIndex:0, pageSize:10,
+        siteEan, pageIndex:0, pageSize:10,
         sorts:[
           {property:"sectorDesc",direction:"asc"},
           {property:"departmentDesc",direction:"asc"},
