@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.3.4
+// @version      0.3.5
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente à partir du prix Dynacad TTC.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -86,16 +86,10 @@
             <div style="background:#f3f5f8;padding:12px;border-radius:10px">
               <small>TVA</small><br><b id="dp-vat" style="font-size:21px"></b>
             </div>
-            <div style="background:#f3f5f8;padding:12px;border-radius:10px">
-              <small>Prix Dynacad TTC</small><br><b id="dp-dynaprice" style="font-size:21px"></b>
-            </div>
-            <div style="background:#f3f5f8;padding:12px;border-radius:10px">
-              <small>Marge Dynacad</small><br><b id="dp-dynamargin" style="font-size:21px"></b>
-            </div>
           </div>
 
           <hr style="margin:18px 0;border:0;border-top:1px solid #ddd">
-          <label><b>Majoration sur le prix Dynacad TTC</b></label>
+          <label><b>Majoration sur le prix d'achat HT</b></label>
           <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
             <input id="dp-margin" type="number" min="0" step="0.1"
               style="width:110px;padding:10px;font-size:18px;border:1px solid #bbb;border-radius:9px">
@@ -103,7 +97,7 @@
           </div>
 
           <div style="margin-top:18px;padding:16px;background:#eef4ff;border-radius:12px">
-            <div style="color:#687386">Base Dynacad TTC</div>
+            <div style="color:#687386">Prix d'achat HT</div>
             <div id="dp-base" style="font-size:20px;font-weight:bold"></div>
             <div style="color:#687386;margin-top:12px">PRIX DE VENTE TTC PROPOSÉ</div>
             <div id="dp-salettc" style="font-size:38px;font-weight:bold;margin-top:3px"></div>
@@ -260,9 +254,6 @@
       document.getElementById("dp-purchase").textContent = euro(product.purchasePrice);
       document.getElementById("dp-vat").textContent =
         (Number(product.vatPct) || 0).toLocaleString("fr-FR") + " %";
-      document.getElementById("dp-dynaprice").textContent = euro(product.salePriceTTC);
-      document.getElementById("dp-dynamargin").textContent =
-        (Number(product.marginRate) || 0).toLocaleString("fr-FR") + " %";
 
       result.style.display = "block";
       status.textContent = "✓ Produit trouvé";
