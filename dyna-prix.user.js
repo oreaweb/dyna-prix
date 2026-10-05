@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.6.2
+// @version      0.6.3
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -75,6 +75,35 @@
     }
   }
 
+  function showProductAnomalies() {
+    const box = document.getElementById("dp-anomalies");
+    if (!box || !product) return;
+    const warnings = [];
+
+    const purchase = Number(product.purchasePrice);
+    if (!Number.isFinite(purchase) || purchase <= 0) warnings.push("Prix d'achat absent ou nul");
+
+    const vat = Number(product.vatPct);
+    if (!Number.isFinite(vat) || vat < 0) warnings.push("TVA absente ou invalide");
+
+    if (product.notOrderableReason) {
+      warnings.push("Produit non commandable : " + product.notOrderableReason);
+    } else if (product.status != null && String(product.status) !== "2") {
+      warnings.push("Statut produit inhabituel : " + product.status);
+    }
+
+    const dlcc = Number(product.dlcc);
+    if (product.dlcc != null && (!Number.isFinite(dlcc) || dlcc < 0)) warnings.push("DLCC invalide");
+
+    if (warnings.length) {
+      box.innerHTML = "⚠️ " + warnings.map(escapeHtml).join("<br>⚠️ ");
+      box.style.display = "block";
+    } else {
+      box.textContent = "";
+      box.style.display = "none";
+    }
+  }
+
   function scanFeedback() {
     const settings = getSettings();
     if (settings.vibration && navigator.vibrate) navigator.vibrate(80);
@@ -125,7 +154,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.6.2 • 05/10/2026 20h54 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.6.3 • 05/10/2026 21h02 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -153,6 +182,7 @@
         <div id="dp-result" style="display:none">
           <hr style="margin:11px 0;border:0;border-top:1px solid #ddd">
           <h3 id="dp-label" style="margin:0 0 9px"></h3>
+          <div id="dp-anomalies" style="display:none;margin:0 0 10px;padding:9px 11px;background:#fff4e5;color:#8a5700;border-radius:10px;font-size:14px;font-weight:bold"></div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div style="background:#f3f5f8;padding:8px 10px;border-radius:10px">
@@ -605,6 +635,7 @@
       document.getElementById("dp-purchase").textContent = euro(product.purchasePrice);
       document.getElementById("dp-vat").textContent =
         (Number(product.vatPct) || 0).toLocaleString("fr-FR") + " %";
+      showProductAnomalies();
 
       const dlcc = Number(product.dlcc);
       const dlcSection = document.getElementById("dp-dlc-section");
