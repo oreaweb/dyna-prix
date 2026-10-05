@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.6.4
+// @version      0.6.5
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -152,7 +152,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.6.4 • 05/10/2026 21h07 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.6.5 • 05/10/2026 21h42 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -179,7 +179,7 @@
 
         <div id="dp-result" style="display:none">
           <hr style="margin:11px 0;border:0;border-top:1px solid #ddd">
-          <h3 id="dp-label" style="margin:0 0 9px"></h3>
+          <h3 id="dp-label" title="Ouvrir ce produit dans Dynacad" style="margin:0 0 9px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px"></h3>
           <div id="dp-anomalies" style="display:none;margin:0 0 10px;padding:9px 11px;background:#fff4e5;color:#8a5700;border-radius:10px;font-size:14px;font-weight:bold"></div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -266,6 +266,7 @@
 
     document.getElementById("dp-close").onclick = () => { stopScanner(); app.remove(); };
     document.getElementById("dp-search").onclick = searchProduct;
+    document.getElementById("dp-label").onclick = () => openProductInDynacad();
     document.getElementById("dp-scan").onclick = startScanner;
     document.getElementById("dp-stop").onclick = stopScanner;
     document.getElementById("dp-ean").addEventListener("keydown", e => {
@@ -586,6 +587,41 @@
     const data = await r.json();
     if (!data.id_token) throw new Error("Aucun jeton Dynacad reçu.");
     return data.id_token;
+  }
+
+  async function openProductInDynacad() {
+    if (!product?.ean) return;
+    const ean = String(product.ean);
+    stopScanner();
+    document.getElementById("dynaprix-app")?.remove();
+
+    const searchIcon = [...document.querySelectorAll("button.menu-button mat-icon")]
+      .find(el => el.textContent.trim() === "search");
+    const searchButton = searchIcon?.closest("button");
+    if (!searchButton) {
+      alert("Dyna Prix : bouton de recherche Dynacad introuvable.");
+      return;
+    }
+    searchButton.click();
+
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts++;
+      const input = document.querySelector('input[placeholder="Recherche EAN, libellé, etc..."]');
+      const validate = document.querySelector("button.validate");
+      if (input && validate) {
+        clearInterval(timer);
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        if (setter) setter.call(input, ean); else input.value = ean;
+        input.dispatchEvent(new Event("input", {bubbles:true}));
+        input.dispatchEvent(new Event("change", {bubbles:true}));
+        input.focus();
+        setTimeout(() => validate.click(), 100);
+      } else if (attempts >= 30) {
+        clearInterval(timer);
+        alert("Dyna Prix : fenêtre de recherche Dynacad introuvable.");
+      }
+    }, 100);
   }
 
   async function searchProduct() {
