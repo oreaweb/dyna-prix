@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.5.9
+// @version      0.6.0
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -125,7 +125,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.5.9 • 05/10/2026 20h44 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.6.0 • 05/10/2026 20h48 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -152,7 +152,8 @@
 
         <div id="dp-result" style="display:none">
           <hr style="margin:11px 0;border:0;border-top:1px solid #ddd">
-          <h3 id="dp-label" style="margin:0 0 9px"></h3>
+          <h3 id="dp-label" style="margin:0 0 3px"></h3>
+          <div id="dp-brand" style="display:none;margin:0 0 9px;color:#687386;font-size:14px;font-weight:bold"></div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div style="background:#f3f5f8;padding:8px 10px;border-radius:10px">
@@ -598,6 +599,15 @@
 
       product = data.data[0];
       document.getElementById("dp-label").textContent = product.label || "Produit";
+      const brand = product.brandDesc || product.brand || "";
+      const brandBox = document.getElementById("dp-brand");
+      if (brand) {
+        brandBox.textContent = "Marque : " + brand;
+        brandBox.style.display = "block";
+      } else {
+        brandBox.textContent = "";
+        brandBox.style.display = "none";
+      }
       document.getElementById("dp-purchase").textContent = euro(product.purchasePrice);
       document.getElementById("dp-vat").textContent =
         (Number(product.vatPct) || 0).toLocaleString("fr-FR") + " %";
