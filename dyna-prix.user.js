@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.5.4
+// @version      0.5.5
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -50,19 +50,24 @@
     localStorage.setItem(STORAGE_SETTINGS, JSON.stringify(settings));
   }
 
-  function getStoreName(siteEan) {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      const raw = key ? localStorage.getItem(key) : null;
-      if (!raw || !raw.includes(siteEan)) continue;
-      try {
-        const obj = JSON.parse(raw);
-        const candidates = [obj?.storeName, obj?.siteName, obj?.label, obj?.name, obj?.description];
-        const name = candidates.find(v => typeof v === "string" && v.trim() && v.trim() !== siteEan);
-        if (name) return name.trim();
-      } catch (_) {}
+  async function getStoreName(siteEan) {
+    try {
+      const token = await authenticate();
+      const r = await fetch("/api/stores/search?size=2", {
+        method:"GET",
+        credentials:"include",
+        headers:{"Authorization":"Bearer " + token}
+      });
+      if (!r.ok) return "";
+      const data = await r.json();
+      const stores = Array.isArray(data) ? data :
+        (Array.isArray(data.data) ? data.data :
+        (Array.isArray(data.content) ? data.content : []));
+      const store = stores.find(s => String(s?.stoEan || s?.siteEan || "") === String(siteEan));
+      return store?.storeDesc || store?.label || store?.name || "";
+    } catch (_) {
+      return "";
     }
-    return "";
   }
 
   function scanFeedback() {
@@ -115,7 +120,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.5.4 • 05/10/2026 20h25 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.5.5 • 05/10/2026 20h28 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -212,8 +217,12 @@
     const siteLabel = document.getElementById("dp-site-ean");
     try {
       const siteEan = getSiteEan();
-      const storeName = getStoreName(siteEan);
-      siteLabel.textContent = "(" + (storeName ? storeName + " • " : "") + siteEan + ")";
+      siteLabel.textContent = "(" + siteEan + ")";
+      getStoreName(siteEan).then(storeName => {
+        if (siteLabel && siteLabel.isConnected && storeName) {
+          siteLabel.textContent = "(" + storeName + " • " + siteEan + ")";
+        }
+      });
     } catch (_) { siteLabel.textContent = "(site non détecté)"; }
 
     const margin = document.getElementById("dp-margin");
