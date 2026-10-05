@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.7.1
+// @version      0.7.2
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -159,7 +159,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.7.1 • 05/10/2026 22h20 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.7.2 • 06/10/2026 01h08 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -173,6 +173,13 @@
         </div>
         <button id="dp-scan" style="width:100%;height:58px;margin-top:7px;padding:10px;background:#172033;color:white;border:0;
           border-radius:11px;font-weight:bold;font-size:18px;cursor:pointer">📷 Scanner un code-barres</button>
+        <details id="dp-barcode-box" style="margin-top:8px;border:1px solid #d7dde6;border-radius:10px;background:#fff">
+          <summary style="padding:10px 12px;font-weight:bold;cursor:pointer">▤ Afficher le code-barres de cet EAN</summary>
+          <div style="padding:4px 12px 12px">
+            <div id="dp-barcode-msg" style="font-size:13px;color:#687386;margin-bottom:7px">Saisissez un EAN-13 ci-dessus.</div>
+            <svg id="dp-barcode-svg" role="img" aria-label="Code-barres EAN-13" style="display:none;width:100%;height:auto;background:#fff"></svg>
+          </div>
+        </details>
         <div id="dp-camera" style="display:none;margin-top:10px">
           <video id="dp-video" playsinline muted style="width:100%;max-height:280px;background:#000;border-radius:12px"></video>
           <div style="display:flex;gap:7px;margin-top:7px">
@@ -275,6 +282,8 @@
     document.getElementById("dp-search").onclick = searchProduct;
     document.getElementById("dp-label").onclick = () => openProductInDynacad();
     document.getElementById("dp-scan").onclick = startScanner;
+    document.getElementById("dp-barcode-box").addEventListener("toggle", e => { if (e.currentTarget.open) renderBarcode(); });
+    document.getElementById("dp-ean").addEventListener("input", () => { if (document.getElementById("dp-barcode-box").open) renderBarcode(); });
     document.getElementById("dp-stop").onclick = stopScanner;
     document.getElementById("dp-ean").addEventListener("keydown", e => {
       if (e.key === "Enter") searchProduct();
@@ -350,6 +359,20 @@
 
     renderHistory();
     document.getElementById("dp-ean").focus();
+  }
+
+  function ean13Bits(ean) {
+    if (!/^\d{13}$/.test(ean)) return null;
+    const sum=[...ean.slice(0,12)].reduce((s,d,i)=>s+Number(d)*(i%2?3:1),0);
+    if((10-(sum%10))%10!==Number(ean[12])) return null;
+    const L=["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"],G=["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"],R=["1110010","1100110","1101100","1000010","1011100","1001110","1010000","1000100","1001000","1110100"],P=["LLLLLL","LLGLGG","LLGGLG","LLGGGL","LGLLGG","LGGLLG","LGGGLL","LGLGLG","LGLGGL"];
+    let bits="101",p=P[Number(ean[0])];for(let i=1;i<=6;i++)bits+=(p[i-1]==="L"?L:G)[Number(ean[i])];bits+="01010";for(let i=7;i<=12;i++)bits+=R[Number(ean[i])];return bits+"101";
+  }
+  function renderBarcode(){
+    const ean=document.getElementById("dp-ean").value.trim(),svg=document.getElementById("dp-barcode-svg"),msg=document.getElementById("dp-barcode-msg"),bits=ean13Bits(ean);
+    if(!bits){svg.style.display="none";msg.style.display="block";msg.textContent=/^\d{13}$/.test(ean)?"EAN-13 invalide (clé de contrôle incorrecte).":"Saisissez un EAN-13 valide ci-dessus.";return}
+    const q=10,m=2,h=82,w=(95+q*2)*m;let bars="";for(let i=0;i<bits.length;i++)if(bits[i]==="1"){const g=i<3||(i>=45&&i<50)||i>=92;bars+='<rect x="'+((i+q)*m)+'" y="4" width="'+m+'" height="'+(g?90:h)+'" fill="#000"/>'}
+    svg.setAttribute("viewBox","0 0 "+w+" 116");svg.innerHTML='<rect width="100%" height="100%" fill="#fff"/>'+bars+'<text x="'+(w/2)+'" y="110" text-anchor="middle" font-family="Arial,sans-serif" font-size="15" fill="#000">'+escapeHtml(ean)+'</text>';msg.style.display="none";svg.style.display="block";
   }
 
   let cameraStream = null;
