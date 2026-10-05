@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.3.5
+// @version      0.3.6
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -53,7 +53,7 @@
         padding:22px;border-radius:18px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <h2 style="margin:0">🛒 Dyna Prix</h2>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.3.6 • 05/10/2026 18h</span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:5px 0 20px">Recherche et calcul de prix</div>
@@ -97,9 +97,7 @@
           </div>
 
           <div style="margin-top:18px;padding:16px;background:#eef4ff;border-radius:12px">
-            <div style="color:#687386">Prix d'achat HT</div>
-            <div id="dp-base" style="font-size:20px;font-weight:bold"></div>
-            <div style="color:#687386;margin-top:12px">PRIX DE VENTE TTC PROPOSÉ</div>
+            <div style="color:#687386">PRIX DE VENTE TTC PROPOSÉ</div>
             <div id="dp-salettc" style="font-size:38px;font-weight:bold;margin-top:3px"></div>
           </div>
         </div>
@@ -194,7 +192,6 @@
     const vat = Number(product.vatPct) || 0;
     const pct = Number(document.getElementById("dp-margin").value) || 0;
     const proposed = base * (1 + vat / 100) * (1 + pct / 100);
-    document.getElementById("dp-base").textContent = euro(base);
     document.getElementById("dp-salettc").textContent = euro(proposed);
   }
 
