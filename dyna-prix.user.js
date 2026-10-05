@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.3.8
+// @version      0.3.9
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -53,7 +53,7 @@
         padding:22px;border-radius:18px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.3.7 • 05/10/2026 18h21</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.3.9 • 05/10/2026 18h??</span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:5px 0 20px">Recherche et calcul de prix</div>
@@ -100,6 +100,16 @@
             <div style="color:#687386">PRIX DE VENTE TTC PROPOSÉ</div>
             <div id="dp-salettc" style="font-size:38px;font-weight:bold;margin-top:3px"></div>
           </div>
+
+          <div id="dp-dlc-section" style="display:none">
+            <hr style="margin:18px 0;border:0;border-top:1px solid #ddd">
+            <div style="font-weight:bold;font-size:17px">📅 Contrôle DLC à la réception</div>
+            <div style="margin-top:8px;color:#687386">DLCC exigée : <b id="dp-dlcc" style="color:#172033"></b></div>
+            <label style="display:block;margin-top:12px"><b>DLC inscrite sur le produit</b></label>
+            <input id="dp-dlc-date" type="date"
+              style="width:100%;box-sizing:border-box;margin-top:6px;padding:11px;font-size:17px;border:1px solid #bbb;border-radius:9px">
+            <div id="dp-dlc-result" style="display:none;margin-top:12px;padding:14px;border-radius:10px;font-weight:bold"></div>
+          </div>
         </div>
       </div>`;
 
@@ -119,6 +129,7 @@
       localStorage.setItem(STORAGE_MARGIN, margin.value);
       calculate();
     });
+    document.getElementById("dp-dlc-date").addEventListener("input", checkDlc);
 
     document.getElementById("dp-ean").focus();
   }
@@ -195,6 +206,36 @@
     document.getElementById("dp-salettc").textContent = euro(proposed);
   }
 
+  function checkDlc() {
+    if (!product) return;
+    const dlcc = Number(product.dlcc);
+    const input = document.getElementById("dp-dlc-date");
+    const box = document.getElementById("dp-dlc-result");
+    if (!Number.isFinite(dlcc) || dlcc < 0 || !input.value) {
+      box.style.display = "none";
+      return;
+    }
+
+    const today = new Date();
+    const reception = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const parts = input.value.split("-").map(Number);
+    const expiry = new Date(parts[0], parts[1] - 1, parts[2]);
+    const days = Math.round((expiry - reception) / 86400000);
+
+    box.style.display = "block";
+    if (days >= dlcc) {
+      box.style.background = "#e8f7ec";
+      box.style.color = "#167332";
+      box.textContent = "✓ CONFORME — " + days + " jour" + (days > 1 ? "s" : "") +
+        " restant" + (days > 1 ? "s" : "") + " / minimum " + dlcc + " jour" + (dlcc > 1 ? "s" : "");
+    } else {
+      box.style.background = "#fdebec";
+      box.style.color = "#b00020";
+      box.textContent = "✕ NON CONFORME — " + days + " jour" + (Math.abs(days) > 1 ? "s" : "") +
+        " restant" + (Math.abs(days) > 1 ? "s" : "") + " / minimum " + dlcc + " jour" + (dlcc > 1 ? "s" : "");
+    }
+  }
+
   async function authenticate() {
     const xsrf = getCookie("XSRF-TOKEN");
     if (!xsrf) throw new Error("Session Dynacad introuvable. Reconnectez-vous à Dynacad.");
@@ -251,6 +292,19 @@
       document.getElementById("dp-purchase").textContent = euro(product.purchasePrice);
       document.getElementById("dp-vat").textContent =
         (Number(product.vatPct) || 0).toLocaleString("fr-FR") + " %";
+
+      const dlcc = Number(product.dlcc);
+      const dlcSection = document.getElementById("dp-dlc-section");
+      const dlcInput = document.getElementById("dp-dlc-date");
+      const dlcResult = document.getElementById("dp-dlc-result");
+      dlcInput.value = "";
+      dlcResult.style.display = "none";
+      if (Number.isFinite(dlcc) && dlcc >= 0) {
+        document.getElementById("dp-dlcc").textContent = dlcc + " jour" + (dlcc > 1 ? "s" : "");
+        dlcSection.style.display = "block";
+      } else {
+        dlcSection.style.display = "none";
+      }
 
       result.style.display = "block";
       status.textContent = "✓ Produit trouvé";
