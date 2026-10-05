@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.4.2
+// @version      0.4.3
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -48,24 +48,24 @@
     const app = document.createElement("div");
     app.id = "dynaprix-app";
     app.innerHTML = `
-      <div style="position:fixed;top:12px;left:50%;transform:translateX(-50%);width:calc(100vw - 24px);max-width:410px;box-sizing:border-box;
-        max-height:calc(100vh - 40px);overflow:auto;background:#fff;color:#172033;z-index:999999;
-        padding:22px;border-radius:18px;box-shadow:0 8px 35px rgba(0,0,0,.28);
+      <div id="dp-panel" style="position:fixed;top:6px;bottom:6px;left:50%;transform:translateX(-50%);width:calc(100vw - 12px);max-width:410px;box-sizing:border-box;
+        overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:#fff;color:#172033;z-index:999999;
+        padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.4.2 • 05/10/2026 19h04</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.4.3 • 05/10/2026 19h09</span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
-        <div style="color:#687386;margin:5px 0 20px">Recherche et calcul de prix</div>
+        <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
 
         <label><b>Code-barres EAN</b></label>
         <div style="display:flex;gap:8px;margin-top:6px">
           <input id="dp-ean" inputmode="numeric" autocomplete="off" placeholder="Scanner ou saisir l'EAN"
-            style="flex:1;min-width:0;padding:12px;font-size:17px;border:1px solid #bbb;border-radius:9px">
-          <button id="dp-search" style="padding:12px 15px;background:#1769e0;color:white;border:0;
+            style="flex:1;min-width:0;padding:9px 10px;font-size:16px;border:1px solid #bbb;border-radius:9px">
+          <button id="dp-search" style="padding:9px 13px;background:#1769e0;color:white;border:0;
             border-radius:9px;font-weight:bold;cursor:pointer">Rechercher</button>
         </div>
-        <button id="dp-scan" style="width:100%;margin-top:9px;padding:13px;background:#172033;color:white;border:0;
+        <button id="dp-scan" style="width:100%;margin-top:7px;padding:10px;background:#172033;color:white;border:0;
           border-radius:9px;font-weight:bold;font-size:16px;cursor:pointer">📷 Scanner un code-barres</button>
         <div id="dp-camera" style="display:none;margin-top:10px">
           <video id="dp-video" playsinline muted style="width:100%;max-height:280px;background:#000;border-radius:12px"></video>
@@ -73,42 +73,42 @@
             border-radius:9px;font-weight:bold;cursor:pointer">Arrêter la caméra</button>
         </div>
 
-        <div id="dp-status" style="margin-top:12px;color:#687386"></div>
+        <div id="dp-status" style="margin-top:7px;color:#687386"></div>
 
         <div id="dp-result" style="display:none">
-          <hr style="margin:18px 0;border:0;border-top:1px solid #ddd">
-          <h3 id="dp-label" style="margin-bottom:15px"></h3>
+          <hr style="margin:11px 0;border:0;border-top:1px solid #ddd">
+          <h3 id="dp-label" style="margin:0 0 9px"></h3>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div style="background:#f3f5f8;padding:12px;border-radius:10px">
-              <small>Prix achat HT</small><br><b id="dp-purchase" style="font-size:21px"></b>
+            <div style="background:#f3f5f8;padding:8px 10px;border-radius:10px">
+              <small>Prix achat HT</small><br><b id="dp-purchase" style="font-size:19px"></b>
             </div>
-            <div style="background:#f3f5f8;padding:12px;border-radius:10px">
-              <small>TVA</small><br><b id="dp-vat" style="font-size:21px"></b>
+            <div style="background:#f3f5f8;padding:8px 10px;border-radius:10px">
+              <small>TVA</small><br><b id="dp-vat" style="font-size:19px"></b>
             </div>
           </div>
 
-          <hr style="margin:18px 0;border:0;border-top:1px solid #ddd">
+          <hr style="margin:11px 0;border:0;border-top:1px solid #ddd">
           <label><b>Majoration sur le prix d'achat HT</b></label>
           <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
             <input id="dp-margin" type="number" min="0" step="0.1"
-              style="width:110px;padding:10px;font-size:18px;border:1px solid #bbb;border-radius:9px">
+              style="width:95px;padding:7px 9px;font-size:17px;border:1px solid #bbb;border-radius:9px">
             <b>%</b>
           </div>
 
-          <div style="margin-top:18px;padding:16px;background:#eef4ff;border-radius:12px">
+          <div style="margin-top:10px;padding:10px 13px;background:#eef4ff;border-radius:12px">
             <div style="color:#687386">PRIX DE VENTE TTC PROPOSÉ</div>
-            <div id="dp-salettc" style="font-size:38px;font-weight:bold;margin-top:3px"></div>
+            <div id="dp-salettc" style="font-size:31px;font-weight:bold;margin-top:1px"></div>
           </div>
 
           <div id="dp-dlc-section" style="display:none">
-            <hr style="margin:18px 0;border:0;border-top:1px solid #ddd">
-            <div style="font-weight:bold;font-size:17px">📅 Contrôle DLC à la réception</div>
-            <div style="margin-top:8px;color:#687386">DLCC exigée : <b id="dp-dlcc" style="color:#172033"></b></div>
-            <label style="display:block;margin-top:12px"><b>DLC inscrite sur le produit</b></label>
+            <hr style="margin:11px 0;border:0;border-top:1px solid #ddd">
+            <div style="font-weight:bold;font-size:16px">📅 Contrôle DLC à la réception</div>
+            <div style="margin-top:4px;color:#687386">DLCC exigée : <b id="dp-dlcc" style="color:#172033"></b></div>
+            <label style="display:block;margin-top:7px"><b>DLC inscrite sur le produit</b></label>
             <input id="dp-dlc-date" type="date"
-              style="width:100%;box-sizing:border-box;margin-top:6px;padding:11px;font-size:17px;border:1px solid #bbb;border-radius:9px">
-            <div id="dp-dlc-result" style="display:none;margin-top:12px;padding:14px;border-radius:10px;font-weight:bold"></div>
+              style="width:100%;box-sizing:border-box;margin-top:4px;padding:8px 10px;font-size:16px;border:1px solid #bbb;border-radius:9px">
+            <div id="dp-dlc-result" style="display:none;margin-top:7px;padding:9px 10px;border-radius:10px;font-weight:bold"></div>
           </div>
         </div>
       </div>`;
