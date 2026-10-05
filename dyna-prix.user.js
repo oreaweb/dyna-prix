@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.3.9
+// @version      0.4.0
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
 // @downloadURL  https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
 // @run-at       document-idle
+// @require      https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js
 // @grant        none
 // ==/UserScript==
 
@@ -53,7 +54,7 @@
         padding:22px;border-radius:18px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.3.9 • 05/10/2026 18h44</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.4.0 • 05/10/2026 18h52</span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:5px 0 20px">Recherche et calcul de prix</div>
@@ -108,6 +109,17 @@
             <label style="display:block;margin-top:12px"><b>DLC inscrite sur le produit</b></label>
             <input id="dp-dlc-date" type="date"
               style="width:100%;box-sizing:border-box;margin-top:6px;padding:11px;font-size:17px;border:1px solid #bbb;border-radius:9px">
+            <button id="dp-ocr" style="width:100%;margin-top:9px;padding:12px;background:#172033;color:white;border:0;
+              border-radius:9px;font-weight:bold;font-size:15px;cursor:pointer">📷 Scanner la DLC</button>
+            <input id="dp-ocr-file" type="file" accept="image/*" capture="environment" style="display:none">
+            <div id="dp-ocr-status" style="display:none;margin-top:9px;color:#687386"></div>
+            <div id="dp-ocr-confirm" style="display:none;margin-top:10px;padding:12px;background:#fff7df;border-radius:10px">
+              <div>Date détectée : <b id="dp-ocr-date"></b></div>
+              <div style="display:flex;gap:8px;margin-top:9px">
+                <button id="dp-ocr-yes" style="flex:1;padding:10px;background:#167332;color:white;border:0;border-radius:8px;font-weight:bold">✓ Confirmer</button>
+                <button id="dp-ocr-again" style="flex:1;padding:10px;background:white;border:1px solid #bbb;border-radius:8px;font-weight:bold">↻ Rescanner</button>
+              </div>
+            </div>
             <div id="dp-dlc-result" style="display:none;margin-top:12px;padding:14px;border-radius:10px;font-weight:bold"></div>
           </div>
         </div>
@@ -130,6 +142,10 @@
       calculate();
     });
     document.getElementById("dp-dlc-date").addEventListener("input", checkDlc);
+    document.getElementById("dp-ocr").onclick = () => document.getElementById("dp-ocr-file").click();
+    document.getElementById("dp-ocr-again").onclick = () => document.getElementById("dp-ocr-file").click();
+    document.getElementById("dp-ocr-file").addEventListener("change", scanDlcOcr);
+    document.getElementById("dp-ocr-yes").onclick = confirmOcrDate;
 
     document.getElementById("dp-ean").focus();
   }
@@ -204,6 +220,77 @@
     const pct = Number(document.getElementById("dp-margin").value) || 0;
     const proposed = base * (1 + vat / 100) * (1 + pct / 100);
     document.getElementById("dp-salettc").textContent = euro(proposed);
+  }
+
+  let pendingOcrDate = null;
+
+  function extractDlcDate(text) {
+    const normalized = String(text || "").replace(/[Oo]/g, "0");
+    const matches = [...normalized.matchAll(/\b(\d{1,2})\s*[-/.]\s*(\d{1,2})\s*[-/.]\s*(\d{2}|\d{4})\b/g)];
+    for (const m of matches) {
+      const day = Number(m[1]);
+      const month = Number(m[2]);
+      let year = Number(m[3]);
+      if (year < 100) year += 2000;
+      const d = new Date(year, month - 1, day);
+      if (d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day) {
+        return {
+          iso: year + "-" + String(month).padStart(2, "0") + "-" + String(day).padStart(2, "0"),
+          display: String(day).padStart(2, "0") + "/" + String(month).padStart(2, "0") + "/" + year
+        };
+      }
+    }
+    return null;
+  }
+
+  async function scanDlcOcr(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    const status = document.getElementById("dp-ocr-status");
+    const confirm = document.getElementById("dp-ocr-confirm");
+    status.style.display = "block";
+    status.style.color = "#687386";
+    status.textContent = "Lecture de la date en cours…";
+    confirm.style.display = "none";
+    pendingOcrDate = null;
+
+    try {
+      if (!window.Tesseract?.createWorker) throw new Error("Module OCR indisponible.");
+      const worker = await Tesseract.createWorker("eng", 1, {
+        logger: m => {
+          if (m.status === "recognizing text" && Number.isFinite(m.progress)) {
+            status.textContent = "Lecture de la date… " + Math.round(m.progress * 100) + " %";
+          }
+        }
+      });
+      try {
+        const ret = await worker.recognize(file, { rotateAuto: true });
+        const found = extractDlcDate(ret.data.text);
+        if (!found) throw new Error("Aucune date reconnue. Essayez de cadrer la date de plus près.");
+        pendingOcrDate = found;
+        document.getElementById("dp-ocr-date").textContent = found.display;
+        confirm.style.display = "block";
+        status.textContent = "Date trouvée. Vérifiez-la avant de confirmer.";
+        status.style.color = "#8a6200";
+      } finally {
+        await worker.terminate();
+      }
+    } catch (err) {
+      status.style.color = "#b00020";
+      status.textContent = "⚠ " + err.message;
+    }
+  }
+
+  function confirmOcrDate() {
+    if (!pendingOcrDate) return;
+    document.getElementById("dp-dlc-date").value = pendingOcrDate.iso;
+    document.getElementById("dp-ocr-confirm").style.display = "none";
+    const status = document.getElementById("dp-ocr-status");
+    status.style.color = "#167332";
+    status.textContent = "✓ DLC confirmée : " + pendingOcrDate.display;
+    checkDlc();
   }
 
   function checkDlc() {
@@ -299,6 +386,9 @@
       const dlcResult = document.getElementById("dp-dlc-result");
       dlcInput.value = "";
       dlcResult.style.display = "none";
+      pendingOcrDate = null;
+      document.getElementById("dp-ocr-confirm").style.display = "none";
+      document.getElementById("dp-ocr-status").style.display = "none";
       if (Number.isFinite(dlcc) && dlcc >= 0) {
         document.getElementById("dp-dlcc").textContent = dlcc + " jour" + (dlcc > 1 ? "s" : "");
         dlcSection.style.display = "block";
