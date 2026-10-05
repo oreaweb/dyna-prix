@@ -2,7 +2,7 @@
 // @name         Dyna Prix
 // @namespace    local.dynaprix
 // @version      0.3.5
-// @description  Recherche/scan EAN Dynacad et calcule un prix de vente à partir du prix Dynacad TTC.
+// @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
 // @downloadURL  https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
