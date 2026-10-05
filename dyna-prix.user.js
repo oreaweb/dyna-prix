@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.4.8
+// @version      0.4.9
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -15,6 +15,7 @@
 
   const SITE_EAN = "3020180368049";
   const STORAGE_MARGIN = "dynaprix-margin";
+  const STORAGE_HISTORY = "dynaprix-history";
   let product = null;
 
   const euro = n => Number(n).toLocaleString("fr-FR", {
@@ -53,7 +54,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.4.8 • 05/10/2026 19h36</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.4.9 • 05/10/2026 19h43</span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -90,10 +91,12 @@
 
           <hr style="margin:11px 0;border:0;border-top:1px solid #ddd">
           <label><b>Majoration sur le prix d'achat HT</b></label>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <div style="display:flex;align-items:center;gap:7px;margin-top:6px">
+            <button id="dp-margin-minus" type="button" style="width:48px;height:42px;border:1px solid #bbb;background:#fff;border-radius:9px;font-size:22px;font-weight:bold;cursor:pointer">−</button>
             <input id="dp-margin" type="number" min="0" step="0.1"
-              style="width:95px;padding:7px 9px;font-size:17px;border:1px solid #bbb;border-radius:9px">
+              style="width:82px;padding:7px 8px;font-size:17px;text-align:center;border:1px solid #bbb;border-radius:9px">
             <b>%</b>
+            <button id="dp-margin-plus" type="button" style="width:48px;height:42px;border:1px solid #bbb;background:#fff;border-radius:9px;font-size:22px;font-weight:bold;cursor:pointer">+</button>
           </div>
 
           <div style="margin-top:10px;padding:10px 13px;background:#eef4ff;border-radius:12px">
@@ -105,6 +108,7 @@
             <hr style="margin:11px 0;border:0;border-top:1px solid #ddd">
             <div style="font-weight:bold;font-size:16px">📅 Contrôle DLC à la réception</div>
             <div style="margin-top:4px;color:#687386">DLCC exigée : <b id="dp-dlcc" style="color:#172033"></b></div>
+            <div style="margin-top:3px;color:#687386">DLC minimale acceptable : <b id="dp-dlc-min" style="color:#172033"></b></div>
             <label style="display:block;margin-top:7px"><b>DLC inscrite sur le produit</b></label>
             <div style="display:flex;gap:7px;margin-top:4px">
               <input id="dp-dlc-date" type="text" inputmode="numeric" autocomplete="off" placeholder="JJ/MM/AAAA"
@@ -116,6 +120,16 @@
             </div>
             <div id="dp-dlc-result" style="display:none;margin-top:7px;padding:9px 10px;border-radius:10px;font-weight:bold"></div>
           </div>
+
+          <button id="dp-next-scan" type="button" style="width:100%;height:54px;margin-top:14px;background:#1769e0;color:#fff;border:0;border-radius:11px;font-size:18px;font-weight:bold;cursor:pointer">📷 Scanner le produit suivant</button>
+        </div>
+
+        <div style="margin-top:14px;border-top:1px solid #ddd;padding-top:11px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <b>🕘 Derniers produits</b>
+            <button id="dp-history-clear" type="button" style="border:0;background:none;color:#687386;cursor:pointer;font-size:12px">Effacer</button>
+          </div>
+          <div id="dp-history" style="margin-top:6px"></div>
         </div>
       </div>`;
 
@@ -135,6 +149,23 @@
       localStorage.setItem(STORAGE_MARGIN, margin.value);
       calculate();
     });
+    const changeMargin = delta => {
+      const current = Number(margin.value) || 0;
+      margin.value = Math.max(0, current + delta);
+      localStorage.setItem(STORAGE_MARGIN, margin.value);
+      calculate();
+    };
+    document.getElementById("dp-margin-minus").onclick = () => changeMargin(-5);
+    document.getElementById("dp-margin-plus").onclick = () => changeMargin(5);
+    document.getElementById("dp-next-scan").onclick = () => {
+      document.getElementById("dp-ean").value = "";
+      document.getElementById("dp-result").style.display = "none";
+      startScanner();
+    };
+    document.getElementById("dp-history-clear").onclick = () => {
+      localStorage.removeItem(STORAGE_HISTORY);
+      renderHistory();
+    };
     document.getElementById("dp-dlc-date").addEventListener("input", checkDlc);
     const dlcCalendar = document.getElementById("dp-dlc-calendar");
     document.getElementById("dp-dlc-calendar-btn").onclick = () => {
@@ -148,6 +179,7 @@
       checkDlc();
     });
 
+    renderHistory();
     document.getElementById("dp-ean").focus();
   }
 
@@ -221,6 +253,44 @@
     const pct = Number(document.getElementById("dp-margin").value) || 0;
     const proposed = base * (1 + vat / 100) * (1 + pct / 100);
     document.getElementById("dp-salettc").textContent = euro(proposed);
+  }
+
+  function formatDateFR(date) {
+    return String(date.getDate()).padStart(2, "0") + "/" +
+      String(date.getMonth() + 1).padStart(2, "0") + "/" + date.getFullYear();
+  }
+
+  function renderHistory() {
+    const box = document.getElementById("dp-history");
+    if (!box) return;
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem(STORAGE_HISTORY) || "[]"); } catch (_) {}
+    if (!history.length) {
+      box.innerHTML = '<div style="color:#8a94a6;font-size:13px">Aucun produit pour le moment.</div>';
+      return;
+    }
+    box.innerHTML = history.slice(0, 10).map(h =>
+      '<div style="padding:7px 0;border-bottom:1px solid #eee;font-size:13px">' +
+      '<div style="font-weight:bold">' + escapeHtml(h.label) + '</div>' +
+      '<div style="color:#687386">' + escapeHtml(h.ean) + ' • Prix proposé : <b style="color:#172033">' + escapeHtml(h.price) + '</b></div></div>'
+    ).join("");
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+  }
+
+  function addHistory(ean) {
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem(STORAGE_HISTORY) || "[]"); } catch (_) {}
+    const base = Number(product.purchasePrice);
+    const vat = Number(product.vatPct) || 0;
+    const pct = Number(document.getElementById("dp-margin").value) || 0;
+    const price = euro(base * (1 + vat / 100) * (1 + pct / 100));
+    history = history.filter(h => h.ean !== ean);
+    history.unshift({ean, label:product.label || "Produit", price});
+    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history.slice(0, 10)));
+    renderHistory();
   }
 
   function checkDlc() {
@@ -333,6 +403,10 @@
       dlcResult.style.display = "none";
       if (Number.isFinite(dlcc) && dlcc >= 0) {
         document.getElementById("dp-dlcc").textContent = dlcc + " jour" + (dlcc > 1 ? "s" : "");
+        const minDate = new Date();
+        minDate.setHours(0, 0, 0, 0);
+        minDate.setDate(minDate.getDate() + dlcc);
+        document.getElementById("dp-dlc-min").textContent = formatDateFR(minDate);
         dlcSection.style.display = "block";
       } else {
         dlcSection.style.display = "none";
@@ -342,6 +416,7 @@
       status.textContent = "✓ Produit trouvé";
       status.style.color = "green";
       calculate();
+      addHistory(ean);
     } catch (err) {
       status.textContent = "⚠ " + err.message;
       status.style.color = "#b00020";
