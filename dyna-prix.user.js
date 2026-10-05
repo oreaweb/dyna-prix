@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.4.7
+// @version      0.4.8
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -53,7 +53,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.4.7 • 05/10/2026 19h31</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.4.8 • 05/10/2026 19h36</span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -106,8 +106,14 @@
             <div style="font-weight:bold;font-size:16px">📅 Contrôle DLC à la réception</div>
             <div style="margin-top:4px;color:#687386">DLCC exigée : <b id="dp-dlcc" style="color:#172033"></b></div>
             <label style="display:block;margin-top:7px"><b>DLC inscrite sur le produit</b></label>
-            <input id="dp-dlc-date" type="date"
-              style="width:100%;box-sizing:border-box;margin-top:4px;padding:8px 10px;font-size:16px;border:1px solid #bbb;border-radius:9px">
+            <div style="display:flex;gap:7px;margin-top:4px">
+              <input id="dp-dlc-date" type="text" inputmode="numeric" autocomplete="off" placeholder="JJ/MM/AAAA"
+                style="flex:1;min-width:0;box-sizing:border-box;padding:8px 10px;font-size:16px;border:1px solid #bbb;border-radius:9px">
+              <button id="dp-dlc-calendar-btn" type="button" title="Choisir dans le calendrier"
+                style="width:48px;border:1px solid #bbb;border-radius:9px;background:#fff;font-size:22px;cursor:pointer">📅</button>
+              <input id="dp-dlc-calendar" type="date" tabindex="-1"
+                style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px">
+            </div>
             <div id="dp-dlc-result" style="display:none;margin-top:7px;padding:9px 10px;border-radius:10px;font-weight:bold"></div>
           </div>
         </div>
@@ -130,6 +136,17 @@
       calculate();
     });
     document.getElementById("dp-dlc-date").addEventListener("input", checkDlc);
+    const dlcCalendar = document.getElementById("dp-dlc-calendar");
+    document.getElementById("dp-dlc-calendar-btn").onclick = () => {
+      if (typeof dlcCalendar.showPicker === "function") dlcCalendar.showPicker();
+      else dlcCalendar.click();
+    };
+    dlcCalendar.addEventListener("change", () => {
+      if (!dlcCalendar.value) return;
+      const [y, m, d] = dlcCalendar.value.split("-");
+      document.getElementById("dp-dlc-date").value = d + "/" + m + "/" + y;
+      checkDlc();
+    });
 
     document.getElementById("dp-ean").focus();
   }
@@ -218,8 +235,23 @@
 
     const today = new Date();
     const reception = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const parts = input.value.split("-").map(Number);
-    const expiry = new Date(parts[0], parts[1] - 1, parts[2]);
+    const match = input.value.trim().match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+    if (!match) {
+      box.style.display = "block";
+      box.style.background = "#fff4e5";
+      box.style.color = "#8a5700";
+      box.textContent = "Saisissez la date au format JJ/MM/AAAA.";
+      return;
+    }
+    const d = Number(match[1]), m = Number(match[2]), y = Number(match[3]);
+    const expiry = new Date(y, m - 1, d);
+    if (expiry.getFullYear() !== y || expiry.getMonth() !== m - 1 || expiry.getDate() !== d) {
+      box.style.display = "block";
+      box.style.background = "#fff4e5";
+      box.style.color = "#8a5700";
+      box.textContent = "Date invalide.";
+      return;
+    }
     const days = Math.round((expiry - reception) / 86400000);
 
     box.style.display = "block";
