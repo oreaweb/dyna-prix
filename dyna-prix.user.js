@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.4.3
+// @version      0.4.4
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -97,7 +97,7 @@
           </div>
 
           <div style="margin-top:10px;padding:10px 13px;background:#eef4ff;border-radius:12px">
-            <div style="color:#687386">PRIX DE VENTE TTC PROPOSÉ</div>
+            <div style="color:#687386;font-size:17px;font-weight:bold">PRIX DE VENTE TTC PROPOSÉ</div>
             <div id="dp-salettc" style="font-size:31px;font-weight:bold;margin-top:1px"></div>
           </div>
 
