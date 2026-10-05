@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.4.0
+// @version      0.4.1
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -54,7 +54,7 @@
         padding:22px;border-radius:18px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.4.0 • 05/10/2026 18h52</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.4.1 • 05/10/2026 18h58</span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:5px 0 20px">Recherche et calcul de prix</div>
@@ -266,9 +266,36 @@
         }
       });
       try {
-        const ret = await worker.recognize(file, { rotateAuto: true });
+        await worker.setParameters({
+          tessedit_char_whitelist: "0123456789-/. ",
+          tessedit_pageseg_mode: "6"
+        });
+
+        const bitmap = await createImageBitmap(file);
+        const cropW = Math.round(bitmap.width * 0.92);
+        const cropH = Math.round(bitmap.height * 0.42);
+        const sx = Math.round((bitmap.width - cropW) / 2);
+        const sy = Math.round((bitmap.height - cropH) / 2);
+        const scale = 2;
+        const canvas = document.createElement("canvas");
+        canvas.width = cropW * scale;
+        canvas.height = cropH * scale;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(bitmap, sx, sy, cropW, cropH, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const p = img.data;
+        for (let i = 0; i < p.length; i += 4) {
+          const gray = Math.round(0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2]);
+          const v = gray > 150 ? 255 : 0;
+          p[i] = p[i + 1] = p[i + 2] = v;
+        }
+        ctx.putImageData(img, 0, 0);
+
+        const ret = await worker.recognize(canvas);
         const found = extractDlcDate(ret.data.text);
-        if (!found) throw new Error("Aucune date reconnue. Essayez de cadrer la date de plus près.");
+        if (!found) throw new Error("Aucune date reconnue. Placez la date au centre de la photo et cadrez-la de près.");
         pendingOcrDate = found;
         document.getElementById("dp-ocr-date").textContent = found.display;
         confirm.style.display = "block";
