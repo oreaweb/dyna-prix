@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.5.7
+// @version      0.5.8
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -124,7 +124,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.5.7 • 05/10/2026 20h35 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.5.8 • 05/10/2026 20h40 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -140,8 +140,11 @@
           border-radius:11px;font-weight:bold;font-size:18px;cursor:pointer">📷 Scanner un code-barres</button>
         <div id="dp-camera" style="display:none;margin-top:10px">
           <video id="dp-video" playsinline muted style="width:100%;max-height:280px;background:#000;border-radius:12px"></video>
-          <button id="dp-stop" style="width:100%;margin-top:7px;padding:10px;border:1px solid #bbb;background:white;
-            border-radius:9px;font-weight:bold;cursor:pointer">Arrêter la caméra</button>
+          <div style="display:flex;gap:7px;margin-top:7px">
+            <button id="dp-torch" type="button" style="display:none;flex:1;padding:10px;border:1px solid #bbb;background:#fff;border-radius:9px;font-weight:bold;cursor:pointer">🔦 Allumer le flash</button>
+            <button id="dp-stop" style="flex:1;padding:10px;border:1px solid #bbb;background:white;
+              border-radius:9px;font-weight:bold;cursor:pointer">Arrêter la caméra</button>
+          </div>
         </div>
 
         <div id="dp-status" style="margin-top:7px;color:#687386"></div>
@@ -314,8 +317,17 @@
 
   let cameraStream = null;
   let scanTimer = null;
+  let torchOn = false;
+  let torchTrack = null;
 
   function stopScanner() {
+    torchOn = false;
+    torchTrack = null;
+    const torchBtn = document.getElementById("dp-torch");
+    if (torchBtn) {
+      torchBtn.style.display = "none";
+      torchBtn.textContent = "🔦 Allumer le flash";
+    }
     if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
     if (cameraStream) {
       cameraStream.getTracks().forEach(t => t.stop());
@@ -342,6 +354,26 @@
       cameraStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" } }, audio: false
       });
+
+      torchTrack = cameraStream.getVideoTracks()[0] || null;
+      const torchBtn = document.getElementById("dp-torch");
+      if (torchTrack) {
+        const caps = typeof torchTrack.getCapabilities === "function" ? torchTrack.getCapabilities() : {};
+        if (caps.torch) {
+          torchBtn.style.display = "block";
+          torchBtn.onclick = async () => {
+            try {
+              torchOn = !torchOn;
+              await torchTrack.applyConstraints({advanced:[{torch:torchOn}]});
+              torchBtn.textContent = torchOn ? "🔦 Éteindre le flash" : "🔦 Allumer le flash";
+            } catch (_) {
+              torchOn = false;
+              torchBtn.textContent = "🔦 Flash indisponible";
+              torchBtn.disabled = true;
+            }
+          };
+        }
+      }
 
       const video = document.getElementById("dp-video");
       document.getElementById("dp-camera").style.display = "block";
