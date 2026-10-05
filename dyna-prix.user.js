@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.5.3
+// @version      0.5.4
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -15,6 +15,7 @@
 
   const STORAGE_MARGIN = "dynaprix-margin";
   const STORAGE_HISTORY = "dynaprix-history";
+  const STORAGE_SETTINGS = "dynaprix-settings";
   let product = null;
 
   const euro = n => Number(n).toLocaleString("fr-FR", {
@@ -37,6 +38,49 @@
       throw new Error("Magasin Dynacad non détecté. Sélectionnez un magasin dans Dynacad puis réessayez.");
     }
     return matches[0].value;
+  }
+
+  function getSettings() {
+    const defaults = { vibration:true, sound:false, history:true };
+    try { return {...defaults, ...JSON.parse(localStorage.getItem(STORAGE_SETTINGS) || "{}")}; }
+    catch (_) { return defaults; }
+  }
+
+  function saveSettings(settings) {
+    localStorage.setItem(STORAGE_SETTINGS, JSON.stringify(settings));
+  }
+
+  function getStoreName(siteEan) {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      const raw = key ? localStorage.getItem(key) : null;
+      if (!raw || !raw.includes(siteEan)) continue;
+      try {
+        const obj = JSON.parse(raw);
+        const candidates = [obj?.storeName, obj?.siteName, obj?.label, obj?.name, obj?.description];
+        const name = candidates.find(v => typeof v === "string" && v.trim() && v.trim() !== siteEan);
+        if (name) return name.trim();
+      } catch (_) {}
+    }
+    return "";
+  }
+
+  function scanFeedback() {
+    const settings = getSettings();
+    if (settings.vibration && navigator.vibrate) navigator.vibrate(80);
+    if (settings.sound) {
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new Ctx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.12);
+      } catch (_) {}
+    }
   }
 
   function getCookie(name) {
@@ -71,7 +115,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.5.3 • 05/10/2026 20h16 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.5.4 • 05/10/2026 20h25 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -109,11 +153,13 @@
           <hr style="margin:11px 0;border:0;border-top:1px solid #ddd">
           <label><b>Majoration sur le prix d'achat HT</b></label>
           <div style="display:flex;align-items:center;gap:7px;margin-top:6px">
-            <button id="dp-margin-minus" type="button" style="width:48px;height:42px;border:1px solid #bbb;background:#fff;border-radius:9px;font-size:22px;font-weight:bold;cursor:pointer">−</button>
+            <button id="dp-margin-minus5" type="button" style="height:42px;padding:0 10px;border:1px solid #bbb;background:#fff;border-radius:9px;font-size:16px;font-weight:bold;cursor:pointer">−5</button>
+            <button id="dp-margin-minus1" type="button" style="height:42px;padding:0 9px;border:1px solid #bbb;background:#fff;border-radius:9px;font-size:16px;font-weight:bold;cursor:pointer">−1</button>
             <input id="dp-margin" type="number" min="0" step="0.1"
-              style="width:82px;padding:7px 8px;font-size:17px;text-align:center;border:1px solid #bbb;border-radius:9px">
+              style="width:66px;padding:7px 5px;font-size:17px;text-align:center;border:1px solid #bbb;border-radius:9px">
             <b>%</b>
-            <button id="dp-margin-plus" type="button" style="width:48px;height:42px;border:1px solid #bbb;background:#fff;border-radius:9px;font-size:22px;font-weight:bold;cursor:pointer">+</button>
+            <button id="dp-margin-plus1" type="button" style="height:42px;padding:0 9px;border:1px solid #bbb;background:#fff;border-radius:9px;font-size:16px;font-weight:bold;cursor:pointer">+1</button>
+            <button id="dp-margin-plus5" type="button" style="height:42px;padding:0 10px;border:1px solid #bbb;background:#fff;border-radius:9px;font-size:16px;font-weight:bold;cursor:pointer">+5</button>
           </div>
 
           <div style="margin-top:10px;padding:10px 13px;background:#eef4ff;border-radius:12px">
@@ -138,7 +184,9 @@
             <div id="dp-dlc-result" style="display:none;margin-top:7px;padding:9px 10px;border-radius:10px;font-weight:bold"></div>
           </div>
 
-          <button id="dp-next-scan" type="button" style="width:100%;height:54px;margin-top:14px;background:#1769e0;color:#fff;border:0;border-radius:11px;font-size:18px;font-weight:bold;cursor:pointer">📷 Scanner le produit suivant</button>
+          <div style="position:sticky;bottom:0;padding-top:10px;background:linear-gradient(transparent,#fff 28%)">
+            <button id="dp-next-scan" type="button" style="width:100%;height:58px;margin-top:6px;background:#1769e0;color:#fff;border:0;border-radius:11px;font-size:18px;font-weight:bold;box-shadow:0 3px 12px rgba(0,0,0,.18);cursor:pointer">📷 Scanner le produit suivant</button>
+          </div>
         </div>
 
         <div style="margin-top:14px;border-top:1px solid #ddd;padding-top:11px">
@@ -148,13 +196,25 @@
           </div>
           <div id="dp-history" style="margin-top:6px"></div>
         </div>
+
+        <details id="dp-settings" style="margin-top:12px;border-top:1px solid #ddd;padding-top:10px">
+          <summary style="font-weight:bold;cursor:pointer">⚙️ Paramètres</summary>
+          <div style="display:grid;gap:8px;margin-top:9px;font-size:14px">
+            <label><input id="dp-set-vibration" type="checkbox"> Vibration après scan</label>
+            <label><input id="dp-set-sound" type="checkbox"> Bip après scan</label>
+            <label><input id="dp-set-history" type="checkbox"> Conserver l'historique</label>
+          </div>
+        </details>
       </div>`;
 
     document.body.appendChild(app);
 
     const siteLabel = document.getElementById("dp-site-ean");
-    try { siteLabel.textContent = "(" + getSiteEan() + ")"; }
-    catch (_) { siteLabel.textContent = "(site non détecté)"; }
+    try {
+      const siteEan = getSiteEan();
+      const storeName = getStoreName(siteEan);
+      siteLabel.textContent = "(" + (storeName ? storeName + " • " : "") + siteEan + ")";
+    } catch (_) { siteLabel.textContent = "(site non détecté)"; }
 
     const margin = document.getElementById("dp-margin");
     margin.value = localStorage.getItem(STORAGE_MARGIN) || "35";
@@ -176,8 +236,10 @@
       localStorage.setItem(STORAGE_MARGIN, margin.value);
       calculate();
     };
-    document.getElementById("dp-margin-minus").onclick = () => changeMargin(-5);
-    document.getElementById("dp-margin-plus").onclick = () => changeMargin(5);
+    document.getElementById("dp-margin-minus5").onclick = () => changeMargin(-5);
+    document.getElementById("dp-margin-minus1").onclick = () => changeMargin(-1);
+    document.getElementById("dp-margin-plus1").onclick = () => changeMargin(1);
+    document.getElementById("dp-margin-plus5").onclick = () => changeMargin(5);
     document.getElementById("dp-next-scan").onclick = () => {
       document.getElementById("dp-ean").value = "";
       document.getElementById("dp-result").style.display = "none";
@@ -187,11 +249,37 @@
       localStorage.removeItem(STORAGE_HISTORY);
       renderHistory();
     };
+    document.getElementById("dp-history").onclick = e => {
+      const del = e.target.closest("[data-delete-ean]");
+      if (del) {
+        e.stopPropagation();
+        deleteHistory(del.dataset.deleteEan);
+        return;
+      }
+      const row = e.target.closest("[data-ean]");
+      if (row) {
+        document.getElementById("dp-ean").value = row.dataset.ean;
+        searchProduct();
+      }
+    };
+
+    const settings = getSettings();
+    const vib = document.getElementById("dp-set-vibration");
+    const snd = document.getElementById("dp-set-sound");
+    const hist = document.getElementById("dp-set-history");
+    vib.checked = settings.vibration;
+    snd.checked = settings.sound;
+    hist.checked = settings.history;
+    [vib, snd, hist].forEach(el => el.addEventListener("change", () => {
+      saveSettings({vibration:vib.checked, sound:snd.checked, history:hist.checked});
+      renderHistory();
+    }));
     const dlcText = document.getElementById("dp-dlc-date");
     dlcText.addEventListener("input", () => {
       const digits = dlcText.value.replace(/\D/g, "");
       if (digits.length === 6 && /^\d{6}$/.test(dlcText.value)) {
         dlcText.value = digits.slice(0, 2) + "/" + digits.slice(2, 4) + "/20" + digits.slice(4, 6);
+        dlcText.blur();
       }
       checkDlc();
     });
@@ -257,6 +345,7 @@
           const codes = await detector.detect(video);
           const hit = codes.find(c => /^\d{8,14}$/.test(c.rawValue || ""));
           if (hit) {
+            scanFeedback();
             document.getElementById("dp-ean").value = hit.rawValue;
             stopScanner();
             status.textContent = "✓ Code-barres détecté : " + hit.rawValue;
@@ -297,10 +386,18 @@
       box.innerHTML = '<div style="color:#8a94a6;font-size:13px">Aucun produit pour le moment.</div>';
       return;
     }
+    if (!getSettings().history) {
+      box.innerHTML = '<div style="color:#8a94a6;font-size:13px">Historique désactivé.</div>';
+      return;
+    }
     box.innerHTML = history.slice(0, 10).map(h =>
-      '<div style="padding:7px 0;border-bottom:1px solid #eee;font-size:13px">' +
-      '<div style="font-weight:bold">' + escapeHtml(h.label) + '</div>' +
-      '<div style="color:#687386">' + escapeHtml(h.ean) + ' • Prix proposé : <b style="color:#172033">' + escapeHtml(h.price) + '</b></div></div>'
+      '<div data-ean="' + escapeHtml(h.ean) + '" style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px;cursor:pointer">' +
+      '<div style="display:flex;justify-content:space-between;gap:8px"><div style="font-weight:bold">' + escapeHtml(h.label) + '</div>' +
+      '<button data-delete-ean="' + escapeHtml(h.ean) + '" title="Supprimer" style="border:0;background:none;color:#8a94a6;font-size:16px;cursor:pointer">✕</button></div>' +
+      '<div style="color:#687386">' + escapeHtml(h.ean) + ' • Prix : <b style="color:#172033">' + escapeHtml(h.price) + '</b></div>' +
+      (h.dlcDate ? '<div style="margin-top:2px;color:' + (h.dlcOk ? '#167332' : '#b00020') + '">' +
+        (h.dlcOk ? '✓' : '✕') + ' DLC ' + escapeHtml(h.dlcDate) + ' — ' + (h.dlcOk ? 'Conforme' : 'Non conforme') + '</div>' : '') +
+      '</div>'
     ).join("");
   }
 
@@ -308,7 +405,29 @@
     return String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   }
 
+  function deleteHistory(ean) {
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem(STORAGE_HISTORY) || "[]"); } catch (_) {}
+    history = history.filter(h => h.ean !== ean);
+    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history));
+    renderHistory();
+  }
+
+  function updateHistoryDlc(ean, dlcDate, dlcOk) {
+    if (!getSettings().history) return;
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem(STORAGE_HISTORY) || "[]"); } catch (_) {}
+    const item = history.find(h => h.ean === ean);
+    if (item) {
+      item.dlcDate = dlcDate;
+      item.dlcOk = dlcOk;
+      localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history));
+      renderHistory();
+    }
+  }
+
   function addHistory(ean) {
+    if (!getSettings().history) return;
     let history = [];
     try { history = JSON.parse(localStorage.getItem(STORAGE_HISTORY) || "[]"); } catch (_) {}
     const base = Number(product.purchasePrice);
@@ -354,11 +473,13 @@
 
     box.style.display = "block";
     if (days >= dlcc) {
+      updateHistoryDlc(document.getElementById("dp-ean").value.trim(), formatDateFR(expiry), true);
       box.style.background = "#e8f7ec";
       box.style.color = "#167332";
       box.textContent = "✓ CONFORME — " + days + " jour" + (days > 1 ? "s" : "") +
         " restant" + (days > 1 ? "s" : "") + " / minimum " + dlcc + " jour" + (dlcc > 1 ? "s" : "");
     } else {
+      updateHistoryDlc(document.getElementById("dp-ean").value.trim(), formatDateFR(expiry), false);
       box.style.background = "#fdebec";
       box.style.color = "#b00020";
       box.textContent = "✕ NON CONFORME — " + days + " jour" + (Math.abs(days) > 1 ? "s" : "") +
