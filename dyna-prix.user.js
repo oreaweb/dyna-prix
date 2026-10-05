@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.3.2
+// @version      0.3.3
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente à partir du prix Dynacad TTC.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -198,7 +198,8 @@
     if (!product) return;
     const base = Number(product.salePriceTTC);
     const pct = Number(document.getElementById("dp-margin").value) || 0;
-    const proposed = base * (1 + pct / 100);
+    const vat = Number(product.vatPct) || 0;
+    const proposed = base * (1 + vat / 100) * (1 + pct / 100);
     document.getElementById("dp-base").textContent = euro(base);
     document.getElementById("dp-salettc").textContent = euro(proposed);
   }
