@@ -1,7 +1,7 @@
 (()=>{"use strict";
   const URL="https://npgxpdcedhmouhduphte.supabase.co";
   const KEY="sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
-  const VERSION="0.3.9";
+  const VERSION="0.4.0";
   let token="";
   let refreshToken="";
   const STORE="dyna_stats_google_session";
@@ -34,12 +34,21 @@
     if(!panel)return;
     $("ds-content").innerHTML='<p class="ds-muted">Chargement des statistiques…</p>';
     try{
-      const days=Number($("ds-period").value),tool=$("ds-tool").value;
-      const rows=await request("/rest/v1/rpc/dyna_stats_summary",{method:"POST",body:JSON.stringify({days_back:days*2})});
+      const period=$("ds-period").value,tool=$("ds-tool").value;
+      const today=fmtDate(new Date());
+      const custom=period==="custom";
+      const start=custom?$("ds-from").value:shiftDate(today,1-Number(period));
+      const end=custom?$("ds-to").value:today;
+      if(!start||!end)throw Error("Choisis les deux dates.");
+      if(start>end)throw Error("La date de début doit précéder la date de fin.");
+      if(end>today)throw Error("La date de fin ne peut pas être dans le futur.");
+      const days=Math.round((Date.parse(end+"T12:00:00Z")-Date.parse(start+"T12:00:00Z"))/86400000)+1;
+      if(days>365)throw Error("Sélectionne une période de 365 jours maximum.");
+      const previousStart=shiftDate(start,-days);
+      const rows=await request("/rest/v1/rpc/dyna_stats_summary_range",{method:"POST",body:JSON.stringify({date_from:previousStart,date_to:end})});
       if(!Array.isArray(rows))throw Error("Réponse inattendue");
-      const today=fmtDate(new Date()),start=shiftDate(today,1-days),previousStart=shiftDate(start,-days);
       const filtered=rows.filter(r=>tool==="all"||r.tool===tool);
-      const current=filtered.filter(r=>r.day>=start&&r.day<=today);
+      const current=filtered.filter(r=>r.day>=start&&r.day<=end);
       const previous=filtered.filter(r=>r.day>=previousStart&&r.day<start);
       const count=(e,t)=>sum(current,e,t),before=(e,t)=>sum(previous,e,t);
       const searches=["search_ean","search_label"],errors=["search_error","reception_sync_error"],actions=["search_ean","search_label","scan","price_calculated","reception_loaded","reception_item","reception_unexpected","reception_report"];
@@ -64,18 +73,20 @@
       const versionsHtml=[...versions].sort((a,b)=>b[1]-a[1]).map(([v,n])=>'<div class="ds-line"><span>'+esc(v)+'</span><b>'+number(n)+' ouverture(s)</b></div>').join("")||'<p class="ds-muted">Aucune ouverture enregistrée.</p>';
       const fail=count(["search_error"],"prix"),found=count(searches,"prix"),missing=count(["search_empty"],"prix");
       const insight=tool==="reception"?'Les articles contrôlés comptent les actions de contrôle, pas nécessairement les articles distincts.':found?'Sur '+number(found)+' recherches, '+number(missing)+' ont été signalées sans résultat et '+number(fail)+' ont généré une erreur. Les événements peuvent se recouper.':'Aucune recherche de prix enregistrée sur cette période.';
-      $("ds-content").innerHTML='<p class="ds-muted">Du '+start.split("-").reverse().join("/")+' au '+today.split("-").reverse().join("/")+' · Comparaison avec les '+days+' jours précédents</p><div class="ds-kpis">'+cards+'</div><section class="ds-section"><h3>Activité quotidienne</h3><p class="ds-muted">'+(tool!=="reception"?'<i class="ds-pill" style="background:'+C.prix+'"></i>Dyna Prix':'')+(tool==="all"?' &nbsp; ':'')+(tool!=="prix"?'<i class="ds-pill" style="background:'+C.reception+'"></i>Dyna Réception':'')+' · Actions enregistrées</p><div class="ds-chart">'+graph+'</div></section><div class="ds-columns">'+(tool==="all"?'<section class="ds-section"><h3>Répartition de l’activité</h3>'+split+'</section>':'')+'<section class="ds-section"><h3>Qualité et utilisation</h3><p class="ds-note ds-muted">'+insight+'</p><p class="ds-muted">Erreurs enregistrées : <b>'+number(count(errors))+'</b> · Évolution vs période précédente : <b>'+(delta(count(errors),before(errors))===null?'non calculable':delta(count(errors),before(errors))+' %')+'</b></p></section></div><div class="ds-columns"><section class="ds-section"><h3>Détail des fonctionnalités</h3>'+detailHtml+'</section><section class="ds-section"><h3>Versions actives</h3><p class="ds-muted">Nombre d’ouvertures par version, et non nombre d’utilisateurs ou d’installations.</p>'+versionsHtml+'</section></div><p class="ds-muted ds-section">Les chiffres proviennent des événements remontés par les outils. Ils ne permettent pas de compter les utilisateurs uniques. Les données de la journée sont partielles et la comparaison se fait par journées calendaires (heure de Paris).</p>';
+      $("ds-content").innerHTML='<p class="ds-muted">Du '+start.split("-").reverse().join("/")+' au '+end.split("-").reverse().join("/")+' · Comparaison avec les '+days+' jours précédents</p><div class="ds-kpis">'+cards+'</div><section class="ds-section"><h3>Activité quotidienne</h3><p class="ds-muted">'+(tool!=="reception"?'<i class="ds-pill" style="background:'+C.prix+'"></i>Dyna Prix':'')+(tool==="all"?' &nbsp; ':'')+(tool!=="prix"?'<i class="ds-pill" style="background:'+C.reception+'"></i>Dyna Réception':'')+' · Actions enregistrées</p><div class="ds-chart">'+graph+'</div></section><div class="ds-columns">'+(tool==="all"?'<section class="ds-section"><h3>Répartition de l’activité</h3>'+split+'</section>':'')+'<section class="ds-section"><h3>Qualité et utilisation</h3><p class="ds-note ds-muted">'+insight+'</p><p class="ds-muted">Erreurs enregistrées : <b>'+number(count(errors))+'</b> · Évolution vs période précédente : <b>'+(delta(count(errors),before(errors))===null?'non calculable':delta(count(errors),before(errors))+' %')+'</b></p></section></div><div class="ds-columns"><section class="ds-section"><h3>Détail des fonctionnalités</h3>'+detailHtml+'</section><section class="ds-section"><h3>Versions actives</h3><p class="ds-muted">Nombre d’ouvertures par version, et non nombre d’utilisateurs ou d’installations.</p>'+versionsHtml+'</section></div><p class="ds-muted ds-section">Les chiffres proviennent des événements remontés par les outils. Ils ne permettent pas de compter les utilisateurs uniques. Les données de la journée sont partielles et la comparaison se fait par journées calendaires (heure de Paris).</p>';
     }catch(e){$("ds-content").innerHTML='<p style="color:#b00020">Accès impossible (v'+VERSION+') : '+esc(e.message)+'</p><button id="ds-retry">Réessayer</button>';$("ds-retry").onclick=load}
   }
   function open(){
     if(panel){panel.remove();panel=null;return}
     panel=document.createElement("div");panel.id="ds-panel";
     panel.style.cssText="position:fixed;inset:8px auto 8px 50%;transform:translateX(-50%);width:calc(100vw - 16px);max-width:460px;overflow:auto;box-sizing:border-box;background:white;color:#172033;z-index:1000002;padding:15px;border-radius:15px;box-shadow:0 8px 35px #0006;font-family:Arial,sans-serif";
-    panel.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div><h2 style="margin:0">📊 Dyna Stats</h2><small style="color:#8a94a6">v'+VERSION+' • 09/10/2026 • Web</small></div><button id="ds-close" style="border:0;background:transparent;font-size:22px">Déconnexion</button></div><div style="display:flex;gap:7px;margin:14px 0"><select id="ds-tool" style="flex:1;min-width:0;padding:9px"><option value="all">Les deux outils</option><option value="prix" selected>Dyna Prix</option><option value="reception">Dyna Réception</option></select><select id="ds-period" style="padding:9px"><option value="1">Aujourd’hui</option><option value="7" selected>7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select></div><div id="ds-content"></div>';
+    panel.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div><h2 style="margin:0">📊 Dyna Stats</h2><small style="color:#8a94a6">v'+VERSION+' • 09/10/2026 • Web</small></div><button id="ds-close" style="border:0;background:transparent;font-size:22px">Déconnexion</button></div><div style="display:flex;gap:7px;margin:14px 0"><select id="ds-tool" style="flex:1;min-width:0;padding:9px"><option value="all">Les deux outils</option><option value="prix" selected>Dyna Prix</option><option value="reception">Dyna Réception</option></select><select id="ds-period" style="padding:9px"><option value="1">Aujourd’hui</option><option value="7" selected>7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option><option value="custom">Entre deux dates…</option></select></div><div id="ds-custom" style="display:none;gap:10px;flex-wrap:wrap;margin:-3px 0 14px"><label style="flex:1;min-width:130px;font-size:12px;color:#627086">Du <input type="date" id="ds-from" style="display:block;box-sizing:border-box;width:100%;padding:9px;margin-top:4px"></label><label style="flex:1;min-width:130px;font-size:12px;color:#627086">Au <input type="date" id="ds-to" style="display:block;box-sizing:border-box;width:100%;padding:9px;margin-top:4px"></label></div><div id="ds-content"></div>';
     document.body.appendChild(panel);
     $("ds-close").onclick=logout;
     $("ds-tool").onchange=load;
-    $("ds-period").onchange=load;
+    $("ds-period").onchange=()=>{$("ds-custom").style.display=$("ds-period").value==="custom"?"flex":"none";load()};
+    $("ds-to").value=fmtDate(new Date());$("ds-from").value=shiftDate($("ds-to").value,-6);
+    $("ds-from").onchange=load;$("ds-to").onchange=load;
     load();
   }
   const launch=document.createElement("button");
