@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.7
+// @version      0.8.8
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -159,7 +159,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.7 • 09/10/2026 14h30 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.8 • 09/10/2026 14h40 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -807,7 +807,7 @@
             '<img data-photo-ean="'+escapeHtml(p.ean||"")+'" alt="" style="display:block;width:100%;height:100%;object-fit:contain;background:#fff">'+
             '<div data-photo-fallback style="display:none;width:100%;height:100%;align-items:center;justify-content:center;color:#a0a8b5;font-size:22px">▧</div>'+
           '</div>'+
-          '<div style="min-width:0;flex:1"><b>'+escapeHtml((brand ? brand+" • " : "")+(p.label||"Produit"))+'</b><br><small style="color:#687386">EAN '+escapeHtml(p.ean||"")+'</small></div></div>';
+          '<div style="min-width:0;flex:1"><b>'+escapeHtml((brand ? brand+" • " : "")+(p.label||"Produit"))+'</b><br><small style="color:#687386">EAN '+escapeHtml(p.ean||"")+' • Prix d’achat HT '+escapeHtml(euro(p.purchasePrice))+'</small></div></div>';
       }).join("");
       results.style.display = "block";
       results.querySelectorAll("img[data-photo-ean]").forEach(img => loadSearchThumbnail(img.dataset.photoEan, img, token));
