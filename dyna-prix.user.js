@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.4
+// @version      0.8.5
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -42,7 +42,7 @@
   }
 
   function getSettings() {
-    const defaults = { vibration:true, sound:false, history:true };
+    const defaults = { vibration:true, sound:false, history:true, dlcControl:false };
     try { return {...defaults, ...JSON.parse(localStorage.getItem(STORAGE_SETTINGS) || "{}")}; }
     catch (_) { return defaults; }
   }
@@ -159,7 +159,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.4 • 09/10/2026 14h00 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.5 • 09/10/2026 14h10 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -264,6 +264,7 @@
             <label><input id="dp-set-vibration" type="checkbox"> Vibration après scan</label>
             <label><input id="dp-set-sound" type="checkbox"> Bip après scan</label>
             <label><input id="dp-set-history" type="checkbox"> Conserver l'historique</label>
+            <label><input id="dp-set-dlc" type="checkbox"> Activer le contrôle DLC</label>
           </div>
         </details>
       </div>`;
@@ -350,12 +351,15 @@
     const vib = document.getElementById("dp-set-vibration");
     const snd = document.getElementById("dp-set-sound");
     const hist = document.getElementById("dp-set-history");
+    const dlcSet = document.getElementById("dp-set-dlc");
     vib.checked = settings.vibration;
     snd.checked = settings.sound;
     hist.checked = settings.history;
-    [vib, snd, hist].forEach(el => el.addEventListener("change", () => {
-      saveSettings({vibration:vib.checked, sound:snd.checked, history:hist.checked});
+    dlcSet.checked = settings.dlcControl;
+    [vib, snd, hist, dlcSet].forEach(el => el.addEventListener("change", () => {
+      saveSettings({vibration:vib.checked, sound:snd.checked, history:hist.checked, dlcControl:dlcSet.checked});
       renderHistory();
+      if (product) displayDlcSection();
     }));
     const dlcText = document.getElementById("dp-dlc-date");
     dlcText.addEventListener("input", () => {
@@ -726,6 +730,23 @@
     }, 100);
   }
 
+  function displayDlcSection() {
+    const dlcSection = document.getElementById("dp-dlc-section");
+    if (!dlcSection || !product) return;
+    const dlcc = Number(product.dlcc);
+    const enabled = getSettings().dlcControl;
+    if (enabled && Number.isFinite(dlcc) && dlcc >= 0) {
+      document.getElementById("dp-dlcc").textContent = dlcc + " jour" + (dlcc > 1 ? "s" : "");
+      const minDate = new Date();
+      minDate.setHours(0,0,0,0);
+      minDate.setDate(minDate.getDate() + dlcc);
+      document.getElementById("dp-dlc-min").textContent = formatDateFR(minDate);
+      dlcSection.style.display = "block";
+    } else {
+      dlcSection.style.display = "none";
+    }
+  }
+
   function displayProduct(p, ean) {
     product = p;
     const brand = product.brandDesc || product.brand || "";
@@ -733,13 +754,9 @@
     document.getElementById("dp-purchase").textContent = euro(product.purchasePrice);
     document.getElementById("dp-vat").textContent = (Number(product.vatPct) || 0).toLocaleString("fr-FR") + " %";
     showProductAnomalies();
-    const dlcc = Number(product.dlcc), dlcSection = document.getElementById("dp-dlc-section"), dlcInput = document.getElementById("dp-dlc-date"), dlcResult = document.getElementById("dp-dlc-result");
+    const dlcInput = document.getElementById("dp-dlc-date"), dlcResult = document.getElementById("dp-dlc-result");
     dlcInput.value = ""; dlcResult.style.display = "none";
-    if (Number.isFinite(dlcc) && dlcc >= 0) {
-      document.getElementById("dp-dlcc").textContent = dlcc + " jour" + (dlcc > 1 ? "s" : "");
-      const minDate = new Date(); minDate.setHours(0,0,0,0); minDate.setDate(minDate.getDate() + dlcc);
-      document.getElementById("dp-dlc-min").textContent = formatDateFR(minDate); dlcSection.style.display = "block";
-    } else dlcSection.style.display = "none";
+    displayDlcSection();
     document.getElementById("dp-result").style.display = "block";
     calculate(); addHistory(ean);
   }
