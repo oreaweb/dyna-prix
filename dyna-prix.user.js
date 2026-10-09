@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.5
+// @version      0.8.6
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -159,7 +159,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.5 • 09/10/2026 14h10 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.6 • 09/10/2026 14h20 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -781,7 +781,7 @@
   async function searchProduct() {
     const status = document.getElementById("dp-status"), result = document.getElementById("dp-result"), results = document.getElementById("dp-search-results");
     const query = document.getElementById("dp-ean").value.trim(), isEan = /^\d{8,14}$/.test(query);
-    status.style.color = "#687386"; status.textContent = "Recherche en cours…"; result.style.display = "none"; results.style.display = "none";
+    status.style.color = "#687386"; status.style.fontWeight = "normal"; status.textContent = "Recherche en cours…"; result.style.display = "none"; results.style.display = "none";
     try {
       if (!query) throw new Error("Saisissez un EAN ou un libellé.");
       const token = await authenticate(), siteEan = getSiteEan();
@@ -819,7 +819,11 @@
         results.style.display = "none"; displayProduct(p, String(p.ean || ""));
         status.textContent = "✓ Produit sélectionné"; status.style.color = "green";
       };
-    } catch (err) { status.textContent = "⚠ " + err.message; status.style.color = "#b00020"; }
+    } catch (err) {
+      status.textContent = "⚠ " + err.message;
+      status.style.color = "#b00020";
+      status.style.fontWeight = err.message === "Aucun produit trouvé." ? "800" : "normal";
+    }
   }
 
   addLauncher();
