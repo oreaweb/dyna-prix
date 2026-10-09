@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.14
+// @version      0.8.15
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -184,7 +184,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.14 • 09/10/2026 15h55 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.15 • 09/10/2026 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -224,17 +224,20 @@
 
         <div id="dp-result" style="display:none">
           <hr style="margin:11px 0;border:0;border-top:1px solid #ddd">
-          <h3 id="dp-label" title="Ouvrir ce produit dans Dynacad" style="margin:0 0 9px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px"></h3>
-          <div id="dp-anomalies" style="display:none;margin:0 0 10px;padding:9px 11px;background:#fff4e5;color:#8a5700;border-radius:10px;font-size:14px;font-weight:bold"></div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div style="background:#f3f5f8;padding:8px 10px;border-radius:10px">
-              <small>Prix achat HT</small><br><b id="dp-purchase" style="font-size:19px"></b>
+          <div style="display:flex;align-items:stretch;gap:10px">
+            <div style="width:80px;flex:0 0 80px;align-self:stretch;max-height:110px;border-radius:9px;background:#f3f5f8;overflow:hidden;display:flex;align-items:center;justify-content:center">
+              <img id="dp-product-photo" alt="Photo du produit" style="width:100%;height:100%;object-fit:contain;background:#fff;display:none">
+              <span data-photo-fallback style="color:#a0a8b5;font-size:28px">▧</span>
             </div>
-            <div style="background:#f3f5f8;padding:8px 10px;border-radius:10px">
-              <small>TVA</small><br><b id="dp-vat" style="font-size:19px"></b>
+            <div style="flex:1;min-width:0">
+              <h3 id="dp-label" title="Ouvrir ce produit dans Dynacad" style="margin:0 0 9px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px"></h3>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div style="background:#f3f5f8;padding:8px;border-radius:10px"><small>Prix achat HT</small><br><b id="dp-purchase" style="font-size:19px"></b></div>
+                <div style="background:#f3f5f8;padding:8px;border-radius:10px"><small>TVA</small><br><b id="dp-vat" style="font-size:19px"></b></div>
+              </div>
             </div>
           </div>
+          <div id="dp-anomalies" style="display:none;margin:0 0 10px;padding:9px 11px;background:#fff4e5;color:#8a5700;border-radius:10px;font-size:14px;font-weight:bold"></div>
 
           <hr style="margin:11px 0;border:0;border-top:1px solid #ddd">
           <label><b>Majoration sur le prix d'achat HT</b></label>
@@ -837,13 +840,18 @@
     }
   }
 
-  function displayProduct(p, ean) {
+  function displayProduct(p, ean, token) {
     product = p;
     const brand = product.brandDesc || product.brand || "";
     document.getElementById("dp-label").textContent = (brand ? brand + " • " : "") + (product.label || "Produit");
     document.getElementById("dp-purchase").textContent = euro(product.purchasePrice);
     document.getElementById("dp-vat").textContent = (Number(product.vatPct) || 0).toLocaleString("fr-FR") + " %";
     showProductAnomalies();
+    const photo = document.getElementById("dp-product-photo");
+    photo.style.display = "none";
+    photo.removeAttribute("src");
+    photo.parentElement.querySelector("[data-photo-fallback]").style.display = "block";
+    if (ean && token) loadSearchThumbnail(ean, photo, token);
     const dlcInput = document.getElementById("dp-dlc-date"), dlcResult = document.getElementById("dp-dlc-result");
     dlcInput.value = ""; dlcResult.style.display = "none";
     displayDlcSection();
@@ -861,6 +869,9 @@
       const pic = await r.json();
       if (!pic?.data) throw new Error("Miniature vide");
       img.src = "data:" + (pic.contentType || "image/jpeg") + ";base64," + pic.data;
+      img.style.display = "block";
+      const fallback = img.parentElement?.querySelector("[data-photo-fallback]");
+      if (fallback) fallback.style.display = "none";
     } catch (_) {
       img.style.display = "none";
       const fallback = img.parentElement?.querySelector("[data-photo-fallback]");
@@ -894,7 +905,7 @@
       const data = await r.json();
       if (!data.data?.length) throw new Error("Aucun produit trouvé.");
       if (isEan) {
-        displayProduct(data.data[0], query); status.textContent = "✓ Produit trouvé"; status.style.color = "green"; return;
+        displayProduct(data.data[0], query, token); status.textContent = "✓ Produit trouvé"; status.style.color = "green"; return;
       }
       const list = [], seen = new Set();
       for (const p of data.data) { const key = String(p.ean || ""); if (key && !seen.has(key)) { seen.add(key); list.push(p); } }
@@ -936,7 +947,7 @@
         const row = ev.target.closest("[data-result-index]"); if (!row) return;
         const p = list[Number(row.dataset.resultIndex)]; if (!p) return;
         const input = document.getElementById("dp-ean"); input.value = String(p.ean || ""); input.dispatchEvent(new Event("input",{bubbles:true}));
-        results.style.display = "none"; displayProduct(p, String(p.ean || ""));
+        results.style.display = "none"; displayProduct(p, String(p.ean || ""), token);
         status.textContent = "✓ Produit sélectionné"; status.style.color = "green";
       };
     } catch (err) {
