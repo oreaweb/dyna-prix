@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.13
+// @version      0.8.14
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -173,13 +173,18 @@
 
     const app = document.createElement("div");
     app.id = "dynaprix-app";
-    app.innerHTML = `
+    let recoveryAtOpen = null;
+    try { recoveryAtOpen = JSON.parse(sessionStorage.getItem(STORAGE_RECOVERY) || "null"); } catch (_) {}
+    const recoveryOverlay = recoveryAtOpen?.query && recoveryAtOpen.reloaded === true && Date.now() - Number(recoveryAtOpen.time || 0) < 120000
+      ? '<div id="dp-recovery-overlay" style="position:fixed;inset:0;z-index:1000001;background:rgba(255,255,255,.92);display:flex;align-items:flex-start;justify-content:center;padding-top:18vh;box-sizing:border-box;font-family:Arial,sans-serif"><div style="background:#fff;border-radius:16px;padding:20px 24px;box-shadow:0 8px 35px rgba(0,0,0,.22);text-align:center;max-width:330px"><div style="font-size:30px;margin-bottom:10px">⏳</div><div style="font-size:18px;font-weight:800;color:#172033">Veuillez patienter…</div><div style="margin-top:7px;color:#687386;font-size:14px">Renouvellement de la session Dynacad en cours.<br>Votre recherche va reprendre automatiquement.</div></div></div>'
+      : "";
+    app.innerHTML = recoveryOverlay + `
       <div id="dp-panel" style="position:fixed;top:6px;bottom:6px;left:50%;transform:translateX(-50%);width:calc(100vw - 12px);max-width:410px;box-sizing:border-box;
         overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:#fff;color:#172033;z-index:999999;
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.13 • 09/10/2026 15h50 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.14 • 09/10/2026 15h55 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -882,6 +887,8 @@
       if (!r.ok) throw new Error("Recherche Dynacad impossible (" + r.status + ").");
       if (sessionStorage.getItem(STORAGE_RECOVERY)) {
         sessionStorage.removeItem(STORAGE_RECOVERY);
+        const overlay = document.getElementById("dp-recovery-overlay");
+        if (overlay) overlay.remove();
         diagnosticLog("Récupération terminée — recherche relancée avec succès");
       }
       const data = await r.json();
