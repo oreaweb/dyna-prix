@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.19
+// @version      0.8.20
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -43,7 +43,7 @@
   }
 
   function getSettings() {
-    const defaults = { vibration:true, sound:false, history:true, dlcControl:false, diagnostic:false };
+    const defaults = { vibration:true, sound:false, history:true, dlcControl:false, diagnostic:false, rounding:"none" };
     try { return {...defaults, ...JSON.parse(localStorage.getItem(STORAGE_SETTINGS) || "{}")}; }
     catch (_) { return defaults; }
   }
@@ -184,7 +184,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.19 • 09/10/2026 16:53 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.20 • 09/10/2026 17h00 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -254,6 +254,11 @@
           <div style="margin-top:10px;padding:10px 13px;background:#eef4ff;border-radius:12px;text-align:center">
             <div style="color:#687386;font-size:17px;font-weight:bold">PRIX DE VENTE TTC PROPOSÉ</div>
             <div id="dp-salettc" style="font-size:clamp(54px,13vw,72px);font-weight:800;line-height:1.1;margin-top:4px;letter-spacing:-1px"></div>
+            <div id="dp-rounded-info" style="font-size:12px;color:#687386;margin-top:3px;display:none"></div>
+            <div style="display:flex;justify-content:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+              <button id="dp-copy-price" type="button" style="border:1px solid #b5c9e8;border-radius:8px;background:white;padding:7px 12px;font-weight:bold;cursor:pointer">📋 Copier le prix</button>
+              <button id="dp-copy-ean" type="button" style="border:1px solid #b5c9e8;border-radius:8px;background:white;padding:7px 12px;font-weight:bold;cursor:pointer">📋 Copier l’EAN</button>
+            </div>
           </div>
 
           <div id="dp-dlc-section" style="display:none">
@@ -293,6 +298,14 @@
             <label><input id="dp-set-sound" type="checkbox"> Bip après scan</label>
             <label><input id="dp-set-history" type="checkbox"> Conserver l'historique</label>
             <label><input id="dp-set-dlc" type="checkbox"> Activer le contrôle DLC</label>
+            <label>Arrondi intelligent du prix TTC
+              <select id="dp-set-rounding" style="display:block;width:100%;margin-top:5px;padding:8px;border:1px solid #bbb;border-radius:8px">
+                <option value="none">Désactivé (prix exact)</option>
+                <option value="90">Arrondir au prochain ,90 €</option>
+                <option value="95">Arrondir au prochain ,95 €</option>
+                <option value="99">Arrondir au prochain ,99 €</option>
+              </select>
+            </label>
             <label><input id="dp-set-diagnostic" type="checkbox"> Mode diagnostic</label>
             <div id="dp-diagnostic-tools" style="display:none">
               <textarea id="dp-diagnostic-log" readonly style="width:100%;height:120px;box-sizing:border-box;font-size:11px"></textarea>
@@ -397,6 +410,7 @@
     const snd = document.getElementById("dp-set-sound");
     const hist = document.getElementById("dp-set-history");
     const dlcSet = document.getElementById("dp-set-dlc");
+    const roundingSet = document.getElementById("dp-set-rounding");
     const diagSet = document.getElementById("dp-set-diagnostic");
     const diagTools = document.getElementById("dp-diagnostic-tools");
     const diagLog = document.getElementById("dp-diagnostic-log");
@@ -405,15 +419,34 @@
     hist.checked = settings.history;
     dlcSet.checked = settings.dlcControl;
     diagSet.checked = settings.diagnostic;
+    roundingSet.value = settings.rounding || "none";
     diagTools.style.display = settings.diagnostic ? "block" : "none";
     diagLog.value = diagnosticText();
-    [vib, snd, hist, dlcSet, diagSet].forEach(el => el.addEventListener("change", () => {
-      saveSettings({vibration:vib.checked, sound:snd.checked, history:hist.checked, dlcControl:dlcSet.checked, diagnostic:diagSet.checked});
+    [vib, snd, hist, dlcSet, diagSet, roundingSet].forEach(el => el.addEventListener("change", () => {
+      saveSettings({vibration:vib.checked, sound:snd.checked, history:hist.checked, dlcControl:dlcSet.checked, diagnostic:diagSet.checked, rounding:roundingSet.value});
+      calculate();
       diagTools.style.display = diagSet.checked ? "block" : "none";
       if (diagSet.checked) diagnosticLog("Mode diagnostic activé");
       renderHistory();
       if (product) displayDlcSection();
     }));
+    const copyText = async (value, button) => {
+      if (!value) return;
+      try {
+        await navigator.clipboard.writeText(value);
+      } catch (_) {
+        const input = document.createElement("textarea");
+        input.value = value; input.style.position = "fixed"; input.style.opacity = "0";
+        document.body.appendChild(input); input.select();
+        const ok = document.execCommand("copy"); input.remove();
+        if (!ok) { button.textContent = "Copie impossible"; return; }
+      }
+      const previous = button.textContent;
+      button.textContent = "✓ Copié !";
+      setTimeout(() => { if (button.isConnected) button.textContent = previous; }, 1400);
+    };
+    document.getElementById("dp-copy-price").onclick = () => copyText(document.getElementById("dp-salettc").textContent, document.getElementById("dp-copy-price"));
+    document.getElementById("dp-copy-ean").onclick = () => copyText(String(product?.ean || document.getElementById("dp-ean").value.trim()), document.getElementById("dp-copy-ean"));
     document.getElementById("dp-diagnostic-copy").onclick = async () => {
       const txt = diagnosticText();
       try { await navigator.clipboard.writeText(txt); } catch (_) { diagLog.select(); document.execCommand("copy"); }
@@ -593,7 +626,18 @@
     const vat = Number(product.vatPct) || 0;
     const pct = Number(document.getElementById("dp-margin").value) || 0;
     const proposed = base * (1 + vat / 100) * (1 + pct / 100);
-    document.getElementById("dp-salettc").textContent = euro(proposed);
+    const mode = getSettings().rounding;
+    let finalPrice = proposed;
+    if (["90","95","99"].includes(mode) && Number.isFinite(proposed) && proposed >= 0) {
+      const cents = Number(mode);
+      const rawCents = Math.ceil(proposed * 100 - 1e-7);
+      const baseCents = Math.floor(rawCents / 100) * 100 + cents;
+      finalPrice = (baseCents < rawCents ? baseCents + 100 : baseCents) / 100;
+    }
+    document.getElementById("dp-salettc").textContent = euro(finalPrice);
+    const info = document.getElementById("dp-rounded-info");
+    info.style.display = mode !== "none" && finalPrice !== proposed ? "block" : "none";
+    info.textContent = "Prix calculé : " + euro(proposed) + " • arrondi supérieur";
   }
 
   function formatDateFR(date) {
