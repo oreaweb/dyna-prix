@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.12
+// @version      0.8.13
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -179,7 +179,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.12 • 09/10/2026 15h20 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.13 • 09/10/2026 15h50 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -445,8 +445,15 @@
         const input = document.getElementById("dp-ean");
         input.value = recovery.query;
         input.dispatchEvent(new Event("input", {bubbles:true}));
-        diagnosticLog("Après rechargement — reprise automatique de la recherche");
-        setTimeout(() => searchProduct(), 800);
+        const status = document.getElementById("dp-status");
+        status.textContent = "🔄 Session Dynacad expirée — renouvellement en cours…";
+        status.style.color = "#1769e0";
+        status.style.fontWeight = "700";
+        diagnosticLog("Après rechargement — attente de la stabilisation Dynacad");
+        setTimeout(() => {
+          diagnosticLog("Après rechargement — reprise automatique de la recherche");
+          searchProduct();
+        }, 3500);
       } else {
         sessionStorage.removeItem(STORAGE_RECOVERY);
       }
@@ -873,6 +880,10 @@
       const r = await fetch("/api/products/search", {method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify(payload)});
       diagnosticLog("POST /api/products/search → HTTP " + r.status);
       if (!r.ok) throw new Error("Recherche Dynacad impossible (" + r.status + ").");
+      if (sessionStorage.getItem(STORAGE_RECOVERY)) {
+        sessionStorage.removeItem(STORAGE_RECOVERY);
+        diagnosticLog("Récupération terminée — recherche relancée avec succès");
+      }
       const data = await r.json();
       if (!data.data?.length) throw new Error("Aucun produit trouvé.");
       if (isEan) {
