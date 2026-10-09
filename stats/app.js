@@ -101,6 +101,8 @@
     $("ds-period").onchange=()=>{$("ds-custom").style.display=$("ds-period").value==="custom"?"flex":"none";load()};
     $("ds-to").value=fmtDate(new Date());$("ds-from").value=shiftDate($("ds-to").value,-6);
     $("ds-from").onchange=load;$("ds-to").onchange=load;
+    $("ds-refresh").onclick=load;
+    refreshTimer=setInterval(()=>{if(panel&&document.visibilityState==="visible")load()},60000);
     load();
   }
   const launch=document.createElement("button");
