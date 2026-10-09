@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.10
+// @version      0.8.11
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -42,13 +42,32 @@
   }
 
   function getSettings() {
-    const defaults = { vibration:true, sound:false, history:true, dlcControl:false };
+    const defaults = { vibration:true, sound:false, history:true, dlcControl:false, diagnostic:false };
     try { return {...defaults, ...JSON.parse(localStorage.getItem(STORAGE_SETTINGS) || "{}")}; }
     catch (_) { return defaults; }
   }
 
   function saveSettings(settings) {
     localStorage.setItem(STORAGE_SETTINGS, JSON.stringify(settings));
+  }
+
+  const STORAGE_DIAG = "dynaprix_diagnostic";
+
+  function diagnosticLog(message) {
+    if (!getSettings().diagnostic) return;
+    let logs = [];
+    try { logs = JSON.parse(localStorage.getItem(STORAGE_DIAG) || "[]"); } catch (_) {}
+    const now = new Date();
+    logs.push(now.toLocaleTimeString("fr-FR") + " — " + message);
+    if (logs.length > 80) logs = logs.slice(-80);
+    localStorage.setItem(STORAGE_DIAG, JSON.stringify(logs));
+    const box = document.getElementById("dp-diagnostic-log");
+    if (box) box.value = logs.join("\n");
+  }
+
+  function diagnosticText() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_DIAG) || "[]").join("\n"); }
+    catch (_) { return ""; }
   }
 
   async function getStoreName(siteEan) {
@@ -159,7 +178,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.10 • 09/10/2026 15h00 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.11 • 09/10/2026 15h10 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -265,6 +284,14 @@
             <label><input id="dp-set-sound" type="checkbox"> Bip après scan</label>
             <label><input id="dp-set-history" type="checkbox"> Conserver l'historique</label>
             <label><input id="dp-set-dlc" type="checkbox"> Activer le contrôle DLC</label>
+            <label><input id="dp-set-diagnostic" type="checkbox"> Mode diagnostic</label>
+            <div id="dp-diagnostic-tools" style="display:none">
+              <textarea id="dp-diagnostic-log" readonly style="width:100%;height:120px;box-sizing:border-box;font-size:11px"></textarea>
+              <div style="display:flex;gap:6px;margin-top:5px">
+                <button id="dp-diagnostic-copy" type="button" style="flex:1;padding:7px">Copier</button>
+                <button id="dp-diagnostic-clear" type="button" style="flex:1;padding:7px">Effacer</button>
+              </div>
+            </div>
           </div>
         </details>
       </div>`;
@@ -361,15 +388,31 @@
     const snd = document.getElementById("dp-set-sound");
     const hist = document.getElementById("dp-set-history");
     const dlcSet = document.getElementById("dp-set-dlc");
+    const diagSet = document.getElementById("dp-set-diagnostic");
+    const diagTools = document.getElementById("dp-diagnostic-tools");
+    const diagLog = document.getElementById("dp-diagnostic-log");
     vib.checked = settings.vibration;
     snd.checked = settings.sound;
     hist.checked = settings.history;
     dlcSet.checked = settings.dlcControl;
-    [vib, snd, hist, dlcSet].forEach(el => el.addEventListener("change", () => {
-      saveSettings({vibration:vib.checked, sound:snd.checked, history:hist.checked, dlcControl:dlcSet.checked});
+    diagSet.checked = settings.diagnostic;
+    diagTools.style.display = settings.diagnostic ? "block" : "none";
+    diagLog.value = diagnosticText();
+    [vib, snd, hist, dlcSet, diagSet].forEach(el => el.addEventListener("change", () => {
+      saveSettings({vibration:vib.checked, sound:snd.checked, history:hist.checked, dlcControl:dlcSet.checked, diagnostic:diagSet.checked});
+      diagTools.style.display = diagSet.checked ? "block" : "none";
+      if (diagSet.checked) diagnosticLog("Mode diagnostic activé");
       renderHistory();
       if (product) displayDlcSection();
     }));
+    document.getElementById("dp-diagnostic-copy").onclick = async () => {
+      const txt = diagnosticText();
+      try { await navigator.clipboard.writeText(txt); } catch (_) { diagLog.select(); document.execCommand("copy"); }
+    };
+    document.getElementById("dp-diagnostic-clear").onclick = () => {
+      localStorage.removeItem(STORAGE_DIAG); diagLog.value = "";
+      diagnosticLog("Journal effacé");
+    };
     const dlcText = document.getElementById("dp-dlc-date");
     dlcText.addEventListener("input", () => {
       const digits = dlcText.value.replace(/\D/g, "");
@@ -642,14 +685,21 @@
 
   async function authenticate() {
     const xsrf = getCookie("XSRF-TOKEN");
-    if (!xsrf) throw new Error("Session Dynacad introuvable. Reconnectez-vous à Dynacad.");
+    diagnosticLog("Authentification demandée — XSRF " + (xsrf ? "présent" : "absent"));
+    if (!xsrf) {
+      diagnosticLog("Authentification interrompue — XSRF absent");
+      throw new Error("Session Dynacad introuvable. Reconnectez-vous à Dynacad.");
+    }
+    diagnosticLog("POST /api/authenticate");
     const r = await fetch("/api/authenticate", {
       method:"POST", credentials:"include",
       headers:{"Content-Type":"application/json","x-xsrf-token":xsrf},
       body:"{}"
     });
+    diagnosticLog("POST /api/authenticate → HTTP " + r.status);
     if (!r.ok) throw new Error("Authentification Dynacad refusée (" + r.status + ").");
     const data = await r.json();
+    diagnosticLog("Authentification " + (data.id_token ? "réussie — jeton reçu" : "réponse sans jeton"));
     if (!data.id_token) throw new Error("Aucun jeton Dynacad reçu.");
     return data.id_token;
   }
@@ -793,6 +843,7 @@
     status.style.color = "#687386"; status.style.fontWeight = "normal"; status.textContent = "Recherche en cours…"; result.style.display = "none"; results.style.display = "none";
     try {
       if (!query) throw new Error("Saisissez un EAN ou un libellé.");
+      diagnosticLog("Recherche demandée — " + (isEan ? "EAN" : "libellé"));
       const token = await authenticate(), siteEan = getSiteEan();
       const payload = {
         siteEan, pageIndex:0, pageSize:isEan ? 10 : 20,
@@ -801,6 +852,7 @@
       };
       if (!isEan) payload.queries = {labelAll:[query]};
       const r = await fetch("/api/products/search", {method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify(payload)});
+      diagnosticLog("POST /api/products/search → HTTP " + r.status);
       if (!r.ok) throw new Error("Recherche Dynacad impossible (" + r.status + ").");
       const data = await r.json();
       if (!data.data?.length) throw new Error("Aucun produit trouvé.");
@@ -851,6 +903,7 @@
         status.textContent = "✓ Produit sélectionné"; status.style.color = "green";
       };
     } catch (err) {
+      diagnosticLog("Erreur — " + err.message);
       status.textContent = "⚠ " + err.message;
       status.style.color = "#b00020";
       status.style.fontWeight = err.message === "Aucun produit trouvé." ? "800" : "normal";
