@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.9
+// @version      0.8.10
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -159,7 +159,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.9 • 09/10/2026 14h50 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.10 • 09/10/2026 15h00 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -177,7 +177,7 @@
         </div>
         <button id="dp-scan" style="width:100%;height:58px;margin-top:7px;padding:10px;background:#172033;color:white;border:0;
           border-radius:11px;font-weight:bold;font-size:18px;cursor:pointer">📷 Scanner un code-barres</button>
-        <details id="dp-barcode-box" style="margin-top:8px;border:1px solid #d7dde6;border-radius:10px;background:#fff">
+        <details id="dp-barcode-box" style="display:none;margin-top:8px;border:1px solid #d7dde6;border-radius:10px;background:#fff">
           <summary style="padding:10px 12px;font-weight:bold;cursor:pointer">▤ Afficher le code-barres de cet EAN</summary>
           <div style="padding:4px 12px 12px">
             <div id="dp-barcode-msg" style="font-size:13px;color:#687386;margin-bottom:7px">Saisissez un EAN-13 ci-dessus.</div>
@@ -292,7 +292,16 @@
     document.getElementById("dp-barcode-box").addEventListener("toggle", e => { if (e.currentTarget.open) renderBarcode(); });
     const eanInput = document.getElementById("dp-ean");
     const eanClear = document.getElementById("dp-ean-clear");
-    const updateEanClear = () => { eanClear.style.display = eanInput.value ? "block" : "none"; };
+    const updateEanClear = () => {
+      const value = eanInput.value.trim();
+      eanClear.style.display = value ? "block" : "none";
+      const barcodeBox = document.getElementById("dp-barcode-box");
+      if (barcodeBox) {
+        const hasEan = /^\d{8,14}$/.test(value);
+        barcodeBox.style.display = hasEan ? "block" : "none";
+        if (!hasEan) barcodeBox.open = false;
+      }
+    };
     eanInput.addEventListener("input", () => { updateEanClear(); if (document.getElementById("dp-barcode-box").open) renderBarcode(); });
     updateEanClear();
     eanClear.onclick = () => {
