@@ -232,8 +232,8 @@
             <div style="flex:1;min-width:0">
               <h3 id="dp-label" title="Ouvrir ce produit dans Dynacad" style="margin:0 0 9px;font-size:18px;line-height:1.2;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px"></h3>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-                <div style="background:#f3f5f8;padding:8px;border-radius:10px"><small>Prix achat HT</small><br><b id="dp-purchase" style="font-size:19px"></b></div>
-                <div style="background:#f3f5f8;padding:8px;border-radius:10px"><small>TVA</small><br><b id="dp-vat" style="font-size:19px"></b></div>
+                <div style="background:#f3f5f8;padding:8px;border-radius:10px;text-align:center"><small>Prix achat HT</small><br><b id="dp-purchase" style="font-size:19px"></b></div>
+                <div style="background:#f3f5f8;padding:8px;border-radius:10px;text-align:center"><small>TVA</small><br><b id="dp-vat" style="font-size:19px"></b></div>
               </div>
             </div>
           </div>
