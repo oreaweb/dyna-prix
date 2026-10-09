@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.7.3
+// @version      0.8.0
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -159,15 +159,15 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.7.3 • 09/10/2026 13h06 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.0 • 09/10/2026 13h20 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
 
-        <label><b>Code-barres EAN</b></label>
+        <label><b>EAN ou libellé produit</b></label>
         <div style="display:flex;gap:8px;margin-top:6px">
           <div style="position:relative;flex:1;min-width:0">
-            <input id="dp-ean" inputmode="numeric" autocomplete="off" placeholder="Scanner ou saisir l'EAN"
+            <input id="dp-ean" autocomplete="off" placeholder="Scanner un EAN ou saisir un libellé"
               style="width:100%;box-sizing:border-box;padding:9px 34px 9px 10px;font-size:16px;border:1px solid #bbb;border-radius:9px">
             <button id="dp-ean-clear" type="button" title="Vider l'EAN" aria-label="Vider l'EAN"
               style="display:none;position:absolute;right:5px;top:50%;transform:translateY(-50%);width:28px;height:28px;padding:0;border:0;background:transparent;color:#687386;font-size:18px;line-height:28px;cursor:pointer">✕</button>
@@ -192,6 +192,8 @@
               border-radius:9px;font-weight:bold;cursor:pointer">Arrêter la caméra</button>
           </div>
         </div>
+
+        <div id="dp-search-results" style="display:none;margin-top:8px;border:1px solid #d7dde6;border-radius:10px;overflow:hidden;background:#fff"></div>
 
         <div id="dp-status" style="margin-top:7px;color:#687386"></div>
 
@@ -295,6 +297,7 @@
       eanInput.value = "";
       updateEanClear();
       document.getElementById("dp-result").style.display = "none";
+      document.getElementById("dp-search-results").style.display = "none";
       document.getElementById("dp-status").textContent = "";
       if (document.getElementById("dp-barcode-box").open) renderBarcode();
       eanInput.focus();
@@ -679,79 +682,60 @@
     }, 100);
   }
 
+  function displayProduct(p, ean) {
+    product = p;
+    const brand = product.brandDesc || product.brand || "";
+    document.getElementById("dp-label").textContent = (brand ? brand + " • " : "") + (product.label || "Produit");
+    document.getElementById("dp-purchase").textContent = euro(product.purchasePrice);
+    document.getElementById("dp-vat").textContent = (Number(product.vatPct) || 0).toLocaleString("fr-FR") + " %";
+    showProductAnomalies();
+    const dlcc = Number(product.dlcc), dlcSection = document.getElementById("dp-dlc-section"), dlcInput = document.getElementById("dp-dlc-date"), dlcResult = document.getElementById("dp-dlc-result");
+    dlcInput.value = ""; dlcResult.style.display = "none";
+    if (Number.isFinite(dlcc) && dlcc >= 0) {
+      document.getElementById("dp-dlcc").textContent = dlcc + " jour" + (dlcc > 1 ? "s" : "");
+      const minDate = new Date(); minDate.setHours(0,0,0,0); minDate.setDate(minDate.getDate() + dlcc);
+      document.getElementById("dp-dlc-min").textContent = formatDateFR(minDate); dlcSection.style.display = "block";
+    } else dlcSection.style.display = "none";
+    document.getElementById("dp-result").style.display = "block";
+    calculate(); addHistory(ean);
+  }
+
   async function searchProduct() {
-    const status = document.getElementById("dp-status");
-    const result = document.getElementById("dp-result");
-    const ean = document.getElementById("dp-ean").value.trim();
-
-    status.style.color = "#687386";
-    status.textContent = "Recherche en cours…";
-    result.style.display = "none";
-
+    const status = document.getElementById("dp-status"), result = document.getElementById("dp-result"), results = document.getElementById("dp-search-results");
+    const query = document.getElementById("dp-ean").value.trim(), isEan = /^\d{8,14}$/.test(query);
+    status.style.color = "#687386"; status.textContent = "Recherche en cours…"; result.style.display = "none"; results.style.display = "none";
     try {
-      if (!/^\d{8,14}$/.test(ean)) throw new Error("EAN invalide.");
-      const token = await authenticate();
-
-      const siteEan = getSiteEan();
+      if (!query) throw new Error("Saisissez un EAN ou un libellé.");
+      const token = await authenticate(), siteEan = getSiteEan();
       const payload = {
-        siteEan, pageIndex:0, pageSize:10,
-        sorts:[
-          {property:"sectorDesc",direction:"asc"},
-          {property:"departmentDesc",direction:"asc"},
-          {property:"classGroupDesc",direction:"asc"},
-          {property:"classDesc",direction:"asc"},
-          {property:"subClassDesc",direction:"asc"},
-          {property:"assortmentLevel",direction:"asc"},
-          {property:"label",direction:"asc"}
-        ],
-        filters:{ean:[ean]}
+        siteEan, pageIndex:0, pageSize:isEan ? 10 : 20,
+        sorts:[{property:"sectorDesc",direction:"asc"},{property:"departmentDesc",direction:"asc"},{property:"classGroupDesc",direction:"asc"},{property:"classDesc",direction:"asc"},{property:"subClassDesc",direction:"asc"},{property:"assortmentLevel",direction:"asc"},{property:"label",direction:"asc"}],
+        filters:isEan ? {ean:[query]} : {}
       };
-
-      const r = await fetch("/api/products/search", {
-        method:"POST", credentials:"include",
-        headers:{"Content-Type":"application/json","Authorization":"Bearer " + token},
-        body:JSON.stringify(payload)
-      });
-
+      if (!isEan) payload.queries = {labelAll:[query]};
+      const r = await fetch("/api/products/search", {method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify(payload)});
       if (!r.ok) throw new Error("Recherche Dynacad impossible (" + r.status + ").");
       const data = await r.json();
-      if (!data.data?.length) throw new Error("Produit introuvable.");
-
-      product = data.data[0];
-      const brand = product.brandDesc || product.brand || "";
-      document.getElementById("dp-label").textContent =
-        (brand ? brand + " • " : "") + (product.label || "Produit");
-      document.getElementById("dp-purchase").textContent = euro(product.purchasePrice);
-      document.getElementById("dp-vat").textContent =
-        (Number(product.vatPct) || 0).toLocaleString("fr-FR") + " %";
-      showProductAnomalies();
-
-      const dlcc = Number(product.dlcc);
-      const dlcSection = document.getElementById("dp-dlc-section");
-      const dlcInput = document.getElementById("dp-dlc-date");
-      const dlcResult = document.getElementById("dp-dlc-result");
-      dlcInput.value = "";
-      dlcResult.style.display = "none";
-      if (Number.isFinite(dlcc) && dlcc >= 0) {
-        document.getElementById("dp-dlcc").textContent = dlcc + " jour" + (dlcc > 1 ? "s" : "");
-        const minDate = new Date();
-        minDate.setHours(0, 0, 0, 0);
-        minDate.setDate(minDate.getDate() + dlcc);
-        document.getElementById("dp-dlc-min").textContent = formatDateFR(minDate);
-        dlcSection.style.display = "block";
-      } else {
-        dlcSection.style.display = "none";
+      if (!data.data?.length) throw new Error("Aucun produit trouvé.");
+      if (isEan) {
+        displayProduct(data.data[0], query); status.textContent = "✓ Produit trouvé"; status.style.color = "green"; return;
       }
-
-      result.style.display = "block";
-      status.textContent = "✓ Produit trouvé";
-      status.style.color = "green";
-      calculate();
-      addHistory(ean);
-    } catch (err) {
-      status.textContent = "⚠ " + err.message;
-      status.style.color = "#b00020";
-    }
+      const list = [], seen = new Set();
+      for (const p of data.data) { const key = String(p.ean || ""); if (key && !seen.has(key)) { seen.add(key); list.push(p); } }
+      results.innerHTML = list.map((p,i) => {
+        const brand = p.brandDesc || p.brand || "";
+        return '<div data-result-index="'+i+'" style="padding:10px 12px;border-bottom:1px solid #eee;cursor:pointer"><b>'+escapeHtml((brand ? brand+" • " : "")+(p.label||"Produit"))+'</b><br><small style="color:#687386">EAN '+escapeHtml(p.ean||"")+' • Prix vente '+escapeHtml(euro(p.salePriceTTC))+'</small></div>';
+      }).join("");
+      results.style.display = "block";
+      status.textContent = list.length + " produit" + (list.length > 1 ? "s" : "") + " trouvé" + (list.length > 1 ? "s" : "") + " — choisissez un produit.";
+      results.onclick = ev => {
+        const row = ev.target.closest("[data-result-index]"); if (!row) return;
+        const p = list[Number(row.dataset.resultIndex)]; if (!p) return;
+        const input = document.getElementById("dp-ean"); input.value = String(p.ean || ""); input.dispatchEvent(new Event("input",{bubbles:true}));
+        results.style.display = "none"; displayProduct(p, String(p.ean || ""));
+        status.textContent = "✓ Produit sélectionné"; status.style.color = "green";
+      };
+    } catch (err) { status.textContent = "⚠ " + err.message; status.style.color = "#b00020"; }
   }
 
   addLauncher();
