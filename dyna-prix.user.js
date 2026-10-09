@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.2
+// @version      0.8.3
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -159,7 +159,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.2 • 09/10/2026 13h40 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.3 • 09/10/2026 13h50 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -644,33 +644,47 @@
     const app = document.getElementById("dynaprix-app");
     if (app) app.style.display = "none";
 
-    const findSearchControls = () => ({
-      input: document.querySelector('input[placeholder="Recherche EAN, libellé, etc..."]'),
-      validate: document.querySelector("button.validate"),
-      clearBtn: document.querySelector("button.clear")
-    });
+    const findInput = () => document.querySelector('input[placeholder="Recherche EAN, libellé, etc..."]');
 
-    const fillAndSearch = (input, validate, clearBtn) => {
-      if (clearBtn) clearBtn.click();
-      setTimeout(() => {
-        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-        if (setter) setter.call(input, ean); else input.value = ean;
-        input.dispatchEvent(new InputEvent("input", {bubbles:true, inputType:"insertText", data:ean}));
-        input.dispatchEvent(new Event("change", {bubbles:true}));
-        input.dispatchEvent(new KeyboardEvent("keydown", {bubbles:true, key:"Enter", code:"Enter"}));
-        input.dispatchEvent(new KeyboardEvent("keyup", {bubbles:true, key:"Enter", code:"Enter"}));
-        input.focus();
-        setTimeout(() => {
-          input.dispatchEvent(new Event("blur", {bubbles:true}));
-          validate.click();
-        }, 700);
-      }, clearBtn ? 350 : 0);
+    const setSearchValue = input => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      if (setter) setter.call(input, ean); else input.value = ean;
+      input.dispatchEvent(new InputEvent("input", {bubbles:true, inputType:"insertText", data:ean}));
+      input.dispatchEvent(new Event("change", {bubbles:true}));
+      input.focus();
     };
 
-    // Grand écran : le champ de recherche Dynacad est déjà présent.
-    let controls = findSearchControls();
-    if (controls.input && controls.validate) {
-      fillAndSearch(controls.input, controls.validate, controls.clearBtn);
+    const pressEnter = input => {
+      input.dispatchEvent(new KeyboardEvent("keydown", {bubbles:true, cancelable:true, key:"Enter", code:"Enter", keyCode:13, which:13}));
+      input.dispatchEvent(new KeyboardEvent("keypress", {bubbles:true, cancelable:true, key:"Enter", code:"Enter", keyCode:13, which:13}));
+      input.dispatchEvent(new KeyboardEvent("keyup", {bubbles:true, cancelable:true, key:"Enter", code:"Enter", keyCode:13, which:13}));
+    };
+
+    // Grand écran : le champ de recherche est permanent et la recherche part avec Entrée.
+    const desktopInput = findInput();
+    const desktopValidate = document.querySelector("button.validate");
+    if (desktopInput && !desktopValidate) {
+      const clearIcon = desktopInput.closest("mat-form-field")?.querySelector('button[aria-label="Clear"]');
+      if (clearIcon) clearIcon.click();
+      setTimeout(() => {
+        setSearchValue(desktopInput);
+        setTimeout(() => pressEnter(desktopInput), 100);
+      }, clearIcon ? 150 : 0);
+      return;
+    }
+
+    // Mobile : la fenêtre de recherche peut déjà être ouverte.
+    if (desktopInput && desktopValidate) {
+      const clearBtn = document.querySelector("button.clear");
+      if (clearBtn) clearBtn.click();
+      setTimeout(() => {
+        setSearchValue(desktopInput);
+        pressEnter(desktopInput);
+        setTimeout(() => {
+          desktopInput.dispatchEvent(new Event("blur", {bubbles:true}));
+          desktopValidate.click();
+        }, 700);
+      }, clearBtn ? 350 : 0);
       return;
     }
 
@@ -687,10 +701,20 @@
     let attempts = 0;
     const timer = setInterval(() => {
       attempts++;
-      controls = findSearchControls();
-      if (controls.input && controls.validate) {
+      const input = findInput();
+      const validate = document.querySelector("button.validate");
+      const clearBtn = document.querySelector("button.clear");
+      if (input && validate) {
         clearInterval(timer);
-        fillAndSearch(controls.input, controls.validate, controls.clearBtn);
+        if (clearBtn) clearBtn.click();
+        setTimeout(() => {
+          setSearchValue(input);
+          pressEnter(input);
+          setTimeout(() => {
+            input.dispatchEvent(new Event("blur", {bubbles:true}));
+            validate.click();
+          }, 700);
+        }, clearBtn ? 350 : 0);
       } else if (attempts >= 30) {
         clearInterval(timer);
         alert("Dyna Prix : fenêtre de recherche Dynacad introuvable.");
