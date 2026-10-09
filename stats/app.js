@@ -1,7 +1,7 @@
 (()=>{"use strict";
   const URL="https://npgxpdcedhmouhduphte.supabase.co";
   const KEY="sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
-  const VERSION="0.3.1";
+  const VERSION="0.3.2";
   let token="";
   let refreshToken="";
   const STORE="dyna_stats_google_session";
@@ -66,7 +66,7 @@
     if(panel){panel.remove();panel=null;return}
     panel=document.createElement("div");panel.id="ds-panel";
     panel.style.cssText="position:fixed;inset:8px auto 8px 50%;transform:translateX(-50%);width:calc(100vw - 16px);max-width:460px;overflow:auto;box-sizing:border-box;background:white;color:#172033;z-index:1000002;padding:15px;border-radius:15px;box-shadow:0 8px 35px #0006;font-family:Arial,sans-serif";
-    panel.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div><h2 style="margin:0">📊 Dyna Stats</h2><small style="color:#8a94a6">v'+VERSION+' • 09/10/2026 • Web</small></div><button id="ds-close" style="border:0;background:transparent;font-size:22px">Déconnexion</button></div><div style="display:flex;gap:7px;margin:14px 0"><select id="ds-tool" style="flex:1;min-width:0;padding:9px"><option value="all">Les deux outils</option><option value="prix">Dyna Prix</option><option value="reception">Dyna Réception</option></select><select id="ds-period" style="padding:9px"><option value="1">Aujourd’hui</option><option value="7" selected>7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select></div><div id="ds-content"></div>';
+    panel.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div><h2 style="margin:0">📊 Dyna Stats</h2><small style="color:#8a94a6">v'+VERSION+' • 09/10/2026 • Web</small></div><button id="ds-close" style="border:0;background:transparent;font-size:22px">Déconnexion</button></div><div style="display:flex;gap:7px;margin:14px 0"><select id="ds-tool" style="flex:1;min-width:0;padding:9px"><option value="all">Les deux outils</option><option value="prix" selected>Dyna Prix</option><option value="reception">Dyna Réception</option></select><select id="ds-period" style="padding:9px"><option value="1">Aujourd’hui</option><option value="7" selected>7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select></div><div id="ds-content"></div>';
     document.body.appendChild(panel);
     $("ds-close").onclick=logout;
     $("ds-tool").onchange=load;
