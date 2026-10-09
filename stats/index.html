@@ -2,9 +2,18 @@
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#26364f"><title>Dyna Stats — Statistiques</title><style>html,body{margin:0;min-height:100%;background:#eaf0f7;font-family:Arial,sans-serif}#ds-launch{display:none!important}#ds-panel{max-width:760px!important;inset:12px auto 12px 50%!important;box-shadow:0 8px 35px #0002!important}@media(max-width:600px){#ds-panel{inset:0 auto 0 50%!important;width:100%!important;border-radius:0!important}}</style></head><body><script>(()=>{"use strict";
   const URL="https://npgxpdcedhmouhduphte.supabase.co";
   const KEY="sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
-  const VERSION="0.1.3";
+  const VERSION="0.2.0";
   let token="";
   let refreshToken="";
+  const STORE="dyna_stats_google_session";
+  const ALLOWED="aurelien.marcon@gmail.com";
+  const redirect=location.origin+location.pathname;
+  const authStyle="font-family:Arial,sans-serif;max-width:440px;margin:12vh auto;padding:30px;border-radius:16px;background:white;box-shadow:0 8px 35px #0002;text-align:center";
+  function loginScreen(message=""){document.body.innerHTML=`<main style="${authStyle}"><h1>📊 Dyna Stats</h1><p>Connecte-toi avec ton compte Google autorisé pour consulter les statistiques.</p>${message?`<p style="color:#b00020">${esc(message)}</p>`:""}<button id="google-login" style="padding:13px 22px;background:#26364f;color:white;border:0;border-radius:9px;cursor:pointer;font-weight:bold">Se connecter avec Google</button></main>`; $("google-login").onclick=()=>{location.href=URL+"/auth/v1/authorize?provider=google&redirect_to="+encodeURIComponent(redirect)};}
+  async function verifySession(){const u=await request("/auth/v1/user");if(u.email?.toLowerCase()!==ALLOWED || u.app_metadata?.provider!=="google")throw Error("Ce compte Google n’est pas autorisé.");return u;}
+  async function restoreSession(){const hash=new URLSearchParams(location.hash.slice(1));if(hash.has("error")){history.replaceState(null,"",redirect);throw Error(hash.get("error_description")||"Connexion refusée.");}if(hash.has("access_token")){token=hash.get("access_token");refreshToken=hash.get("refresh_token")||"";history.replaceState(null,"",redirect);}else{const saved=JSON.parse(localStorage.getItem(STORE)||"null");token=saved?.access_token||"";refreshToken=saved?.refresh_token||"";}if(!token)throw Error("");try{await verifySession();}catch(e){if(!refreshToken)throw e;const r=await fetch(URL+"/auth/v1/token?grant_type=refresh_token",{method:"POST",headers:{"apikey":KEY,"Content-Type":"application/json"},body:JSON.stringify({refresh_token:refreshToken})});if(!r.ok)throw e;const j=await r.json();token=j.access_token;refreshToken=j.refresh_token;await verifySession();}localStorage.setItem(STORE,JSON.stringify({access_token:token,refresh_token:refreshToken}));}
+  function logout(){localStorage.removeItem(STORE);token="";refreshToken="";panel=null;loginScreen();}
+
   let panel=null;
   const $=id=>document.getElementById(id);
   const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -37,7 +46,7 @@
       const cards=[...totals].sort((a,b)=>b[1]-a[1]).map(([k,v])=>'<div style="background:#f3f5f8;border-radius:10px;padding:12px"><div style="font-size:12px;color:#687386">'+esc(label[k]||k)+'</div><b style="font-size:23px">'+v.toLocaleString("fr-FR")+'</b></div>').join("");
       const graph=daysList.map(([day,n])=>'<div style="display:flex;align-items:center;gap:8px;margin:6px 0"><small style="width:53px;color:#687386">'+esc(day.slice(5))+'</small><div style="height:17px;background:#1769e0;border-radius:4px;width:'+Math.max(2,Math.round(n/max*100))+'%"></div><small>'+n+'</small></div>').join("");
       const versions=[...byVersion].sort((a,b)=>b[1]-a[1]).map(([v,n])=>'<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee"><span>'+esc(v)+'</span><b>'+n+'</b></div>').join("");
-      $("ds-content").innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><b>'+all.toLocaleString("fr-FR")+' événements</b><span style="font-size:12px;color:#687386">Accès libre</span></div><p style="color:#687386;font-size:12px;margin:5px 0 12px">Comptages globaux, sans suivi des appareils ou des vendeurs. Les versions représentent les événements enregistrés, pas le nombre d’installations.</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+(cards||'<p>Aucune activité enregistrée.</p>')+'</div><h3 style="margin:18px 0 9px">Activité par jour</h3>'+(graph||'<p>Aucune donnée.</p>')+'<h3 style="margin:18px 0 9px">Versions utilisées</h3>'+(versions||'<p>Aucune donnée.</p>');
+      $("ds-content").innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><b>'+all.toLocaleString("fr-FR")+' événements</b><span style="font-size:12px;color:#687386">Accès privé Google</span></div><p style="color:#687386;font-size:12px;margin:5px 0 12px">Comptages globaux, sans suivi des appareils ou des vendeurs. Les versions représentent les événements enregistrés, pas le nombre d’installations.</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+(cards||'<p>Aucune activité enregistrée.</p>')+'</div><h3 style="margin:18px 0 9px">Activité par jour</h3>'+(graph||'<p>Aucune donnée.</p>')+'<h3 style="margin:18px 0 9px">Versions utilisées</h3>'+(versions||'<p>Aucune donnée.</p>');
 
     }catch(e){$("ds-content").innerHTML='<p style="color:#b00020">Accès impossible : '+esc(e.message)+'</p><p style="color:#687386">Vérifie ta connexion et réessaie.</p><button id="ds-retry">Réessayer</button>';$("ds-retry").onclick=load}
   }
@@ -45,9 +54,9 @@
     if(panel){panel.remove();panel=null;return}
     panel=document.createElement("div");panel.id="ds-panel";
     panel.style.cssText="position:fixed;inset:8px auto 8px 50%;transform:translateX(-50%);width:calc(100vw - 16px);max-width:460px;overflow:auto;box-sizing:border-box;background:white;color:#172033;z-index:1000002;padding:15px;border-radius:15px;box-shadow:0 8px 35px #0006;font-family:Arial,sans-serif";
-    panel.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div><h2 style="margin:0">📊 Dyna Stats</h2><small style="color:#8a94a6">v'+VERSION+' • 09/10/2026 • Web</small></div><button id="ds-close" style="border:0;background:transparent;font-size:22px">✕</button></div><div style="display:flex;gap:7px;margin:14px 0"><select id="ds-tool" style="flex:1;min-width:0;padding:9px"><option value="all">Les deux outils</option><option value="prix">Dyna Prix</option><option value="reception">Dyna Réception</option></select><select id="ds-period" style="padding:9px"><option value="1">24 h</option><option value="7" selected>7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select></div><div id="ds-content"></div>';
+    panel.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div><h2 style="margin:0">📊 Dyna Stats</h2><small style="color:#8a94a6">v'+VERSION+' • 09/10/2026 • Web</small></div><button id="ds-close" style="border:0;background:transparent;font-size:22px">Déconnexion</button></div><div style="display:flex;gap:7px;margin:14px 0"><select id="ds-tool" style="flex:1;min-width:0;padding:9px"><option value="all">Les deux outils</option><option value="prix">Dyna Prix</option><option value="reception">Dyna Réception</option></select><select id="ds-period" style="padding:9px"><option value="1">24 h</option><option value="7" selected>7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select></div><div id="ds-content"></div>';
     document.body.appendChild(panel);
-    $("ds-close").onclick=()=>{panel.remove();panel=null};
+    $("ds-close").onclick=logout;
     $("ds-tool").onchange=load;
     $("ds-period").onchange=load;
     load();
@@ -56,6 +65,6 @@
   launch.textContent="📊 Stats";launch.id="ds-launch";
   launch.style.cssText="position:fixed;right:18px;bottom:90px;z-index:999997;background:#26364f;color:white;border:0;border-radius:999px;padding:12px 16px;font-weight:700;box-shadow:0 4px 18px #0004;cursor:pointer";
   launch.onclick=open;document.body.appendChild(launch);
-  open();
+  restoreSession().then(open).catch(e=>{localStorage.removeItem(STORE);loginScreen(e.message)});
 
 })();</script></body></html>
