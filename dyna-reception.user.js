@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Réception
 // @namespace    local.dynareception
-// @version      0.4.4
+// @version      0.4.5
 // @description  Prototype indépendant de contrôle des réceptions Dynacad.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-reception.user.js
@@ -16,7 +16,8 @@ let app=null, stream=null, detector=null, timer=null, syncTimer=null, torchTrack
 const $=id=>document.getElementById(id);
 const SB_URL="https://npgxpdcedhmouhduphte.supabase.co",SB_KEY="sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
 // Statistiques globales : aucun EAN, prix, magasin ni identifiant d'appareil transmis.
-function stat(event){fetch(SB_URL+"/rest/v1/dyna_stats_events",{method:"POST",mode:"cors",keepalive:true,headers:{"apikey":SB_KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({tool:"reception",event,version:"0.4.4"})}).catch(()=>{})}
+function statsTerminalId(){const key="dyna|stats_terminal_id";let id=localStorage.getItem(key);if(!id){id=crypto.randomUUID?crypto.randomUUID():"10000000-1000-4000-8000-100000000000".replace(/[018]/g,c=>(Number(c)^crypto.getRandomValues(new Uint8Array(1))[0]&(15>>Number(c)/4)).toString(16));localStorage.setItem(key,id)}return id}
+function stat(event){fetch(SB_URL+"/rest/v1/dyna_stats_events",{method:"POST",mode:"cors",keepalive:true,headers:{"apikey":SB_KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({tool:"reception",event,version:"0.4.5",terminal_id:statsTerminalId()})}).catch(()=>{})}
 function uuid(){return (crypto.randomUUID?crypto.randomUUID():URL.createObjectURL(new Blob()).slice(-36))}
 let deviceId=localStorage.getItem("dynareception|device_id");if(!deviceId){deviceId=uuid();localStorage.setItem("dynareception|device_id",deviceId)}
 async function sb(path,opt={}){const r=await fetch(SB_URL+"/rest/v1/"+path,{...opt,headers:{"apikey":SB_KEY,"Content-Type":"application/json",...(opt.headers||{})}});if(!r.ok)throw Error("Synchro "+r.status);if(r.status===204)return null;const t=await r.text();return t?JSON.parse(t):null}
