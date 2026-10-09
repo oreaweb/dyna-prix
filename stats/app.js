@@ -1,7 +1,7 @@
 (()=>{"use strict";
   const URL="https://npgxpdcedhmouhduphte.supabase.co";
   const KEY="sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
-  const VERSION="0.3.3";
+  const VERSION="0.3.4";
   let token="";
   let refreshToken="";
   const STORE="dyna_stats_google_session";
