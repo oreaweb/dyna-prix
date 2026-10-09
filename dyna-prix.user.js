@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.23
+// @version      0.8.24
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -184,7 +184,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.23 • 09/10/2026 17h04 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.24 • 09/10/2026 17h08 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -285,10 +285,11 @@
 
         <div style="margin-top:14px;border-top:1px solid #ddd;padding-top:11px">
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <b>🕘 Derniers produits</b>
+            <b>🕘 Derniers produits <span id="dp-history-count" style="font-size:12px;color:#687386;font-weight:normal"></span></b>
             <button id="dp-history-clear" type="button" style="border:0;background:none;color:#687386;cursor:pointer;font-size:12px">Effacer</button>
           </div>
-          <div id="dp-history" style="margin-top:6px"></div>
+          <input id="dp-history-search" type="search" placeholder="🔎 Rechercher un produit ou un EAN…" style="width:100%;box-sizing:border-box;margin-top:8px;padding:9px;border:1px solid #cbd1dc;border-radius:9px;font-size:14px">
+          <div id="dp-history" style="margin-top:6px;max-height:235px;overflow-y:auto;overscroll-behavior:contain"></div>
         </div>
 
         <details id="dp-settings" style="margin-top:12px;border-top:1px solid #ddd;padding-top:10px">
@@ -389,6 +390,7 @@
       localStorage.removeItem(STORAGE_HISTORY);
       renderHistory();
     };
+    document.getElementById("dp-history-search").addEventListener("input", renderHistory);
     document.getElementById("dp-history").onclick = e => {
       const del = e.target.closest("[data-delete-ean]");
       if (del) {
@@ -650,6 +652,8 @@
     if (!box) return;
     let history = [];
     try { history = JSON.parse(localStorage.getItem(STORAGE_HISTORY) || "[]"); } catch (_) {}
+    const count = document.getElementById("dp-history-count");
+    if (count) count.textContent = "(" + history.length + "/100)";
     if (!history.length) {
       box.innerHTML = '<div style="color:#8a94a6;font-size:13px">Aucun produit pour le moment.</div>';
       return;
@@ -658,15 +662,17 @@
       box.innerHTML = '<div style="color:#8a94a6;font-size:13px">Historique désactivé.</div>';
       return;
     }
-    box.innerHTML = history.slice(0, 10).map(h =>
-      '<div data-ean="' + escapeHtml(h.ean) + '" style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px;cursor:pointer">' +
+    const search = (document.getElementById("dp-history-search")?.value || "").trim().toLocaleLowerCase("fr-FR");
+    const filtered = history.filter(h => (String(h.label || "") + " " + String(h.ean || "")).toLocaleLowerCase("fr-FR").includes(search));
+    box.innerHTML = filtered.length ? filtered.map(h =>
+      '<div data-ean="' + escapeHtml(h.ean) + '" style="padding:6px 0;border-bottom:1px solid #eee;font-size:13px;cursor:pointer">' +
       '<div style="display:flex;justify-content:space-between;gap:8px"><div style="font-weight:bold">' + escapeHtml(h.label) + '</div>' +
       '<button data-delete-ean="' + escapeHtml(h.ean) + '" title="Supprimer" style="border:0;background:none;color:#8a94a6;font-size:16px;cursor:pointer">✕</button></div>' +
       '<div style="color:#687386">' + escapeHtml(h.ean) + ' • Prix : <b style="color:#172033">' + escapeHtml(h.price) + '</b></div>' +
       (h.dlcDate ? '<div style="margin-top:2px;color:' + (h.dlcOk ? '#167332' : '#b00020') + '">' +
         (h.dlcOk ? '✓' : '✕') + ' DLC ' + escapeHtml(h.dlcDate) + ' — ' + (h.dlcOk ? 'Conforme' : 'Non conforme') + '</div>' : '') +
       '</div>'
-    ).join("");
+    ).join("") : '<div style="color:#8a94a6;font-size:13px;padding:8px 0">Aucun résultat.</div>';
   }
 
   function escapeHtml(value) {
@@ -706,7 +712,7 @@
     const brand = product.brandDesc || product.brand || "";
     const historyLabel = (brand ? brand + " • " : "") + (product.label || "Produit");
     history.unshift({ean, label:historyLabel, price});
-    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history.slice(0, 10)));
+    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history.slice(0, 100)));
     renderHistory();
   }
 
