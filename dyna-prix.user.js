@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.42
+// @version      0.8.43
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -47,7 +47,7 @@
   const STATS_URL = "https://npgxpdcedhmouhduphte.supabase.co/rest/v1/dyna_stats_events";
   const STATS_KEY = "sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
   
-const DYNA_SCRIPT_VERSION="0.8.42";
+const DYNA_SCRIPT_VERSION="0.8.43";
 const DYNA_SCRIPT_URL="https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js";
 function dynaVersionParts(v){return String(v).split(".").map(x=>Number(x)||0)}
 function dynaIsNewer(remote,local){const a=dynaVersionParts(remote),b=dynaVersionParts(local);for(let i=0;i<Math.max(a.length,b.length);i++){if((a[i]||0)!==(b[i]||0))return (a[i]||0)>(b[i]||0)}return false}
@@ -96,7 +96,7 @@ function stat(event) {
     fetch(STATS_URL, {
       method:"POST", mode:"cors", keepalive:true,
       headers:{"apikey":STATS_KEY,"Content-Type":"application/json","Prefer":"return=minimal"},
-      body:JSON.stringify({tool:"prix",event,version:"0.8.42",terminal_id:statsTerminalId()})
+      body:JSON.stringify({tool:"prix",event,version:"0.8.43",terminal_id:statsTerminalId()})
     }).catch(() => {}); // Ne jamais bloquer le calcul de prix.
   }
 
@@ -266,7 +266,7 @@ function stat(event) {
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.42 • 09/10/2026 22h17 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.43 • 09/10/2026 22h17 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div id="dp-update-banner" style="display:none;margin:9px 0 12px;padding:12px;background:#fff4df;border:1px solid #edc875;border-radius:11px;color:#6e4700;font-size:13px"><div style="font-weight:800;font-size:14px">🔄 Nouvelle version disponible</div><div style="margin:5px 0 10px">Version <b data-new-version></b> disponible. Vous pouvez continuer à utiliser l'outil en attendant.</div><div style="margin:0 0 10px;padding:9px;background:#fffaf0;border-radius:7px;line-height:1.5"><b>Comment faire ?</b> Cliquez ci-dessous, puis dans la page Tampermonkey qui va s'afficher, cliquez sur <b>« Mettre à jour »</b> pour confirmer, puis patientez : la page s'actualisera automatiquement et l'outil se rouvrira.</div><button type="button" style="width:100%;padding:11px;background:#a96508;color:white;border:0;border-radius:9px;font-weight:800;font-size:14px;cursor:pointer">⬇ Mettre à jour maintenant</button></div>
@@ -405,7 +405,7 @@ function stat(event) {
     dynaCheckUpdate();
     const terminalFooter=document.createElement("div");
     terminalFooter.style.cssText="margin-top:12px;padding:9px 0 3px;text-align:center;color:#8a94a6;font-size:10px;overflow-wrap:anywhere";
-    terminalFooter.textContent="Code du terminal : "+statsTerminalId();
+    terminalFooter.textContent="Code du terminal : "+statsTerminalId().slice(0,8).toUpperCase();
     document.getElementById("dp-panel")?.appendChild(terminalFooter);
 
 
