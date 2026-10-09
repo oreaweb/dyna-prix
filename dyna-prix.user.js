@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.21
+// @version      0.8.22
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -43,7 +43,7 @@
   }
 
   function getSettings() {
-    const defaults = { vibration:true, sound:false, history:true, dlcControl:false, diagnostic:false, rounding:"05" };
+    const defaults = { vibration:true, sound:false, history:true, dlcControl:false, diagnostic:false, rounding:"05", quickCopy:false };
     try { return {...defaults, ...JSON.parse(localStorage.getItem(STORAGE_SETTINGS) || "{}")}; }
     catch (_) { return defaults; }
   }
@@ -184,7 +184,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.21 • 09/10/2026 16h59 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.22 • 09/10/2026 17h01 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -255,7 +255,7 @@
             <div style="color:#687386;font-size:17px;font-weight:bold">PRIX DE VENTE TTC PROPOSÉ</div>
             <div id="dp-salettc" style="font-size:clamp(54px,13vw,72px);font-weight:800;line-height:1.1;margin-top:4px;letter-spacing:-1px"></div>
             <div id="dp-rounded-info" style="font-size:12px;color:#687386;margin-top:3px;display:none"></div>
-            <div style="display:flex;justify-content:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <div id="dp-copy-actions" style="display:none;justify-content:center;gap:8px;margin-top:8px;flex-wrap:wrap">
               <button id="dp-copy-price" type="button" style="border:1px solid #b5c9e8;border-radius:8px;background:white;padding:7px 12px;font-weight:bold;cursor:pointer">📋 Copier le prix</button>
               <button id="dp-copy-ean" type="button" style="border:1px solid #b5c9e8;border-radius:8px;background:white;padding:7px 12px;font-weight:bold;cursor:pointer">📋 Copier l’EAN</button>
             </div>
@@ -304,6 +304,7 @@
                 <option value="none">Désactivé (prix exact)</option>
               </select>
             </label>
+            <label><input id="dp-set-quick-copy" type="checkbox"> Afficher les boutons de copie rapide (prix et EAN)</label>
             <label><input id="dp-set-diagnostic" type="checkbox"> Mode diagnostic</label>
             <div id="dp-diagnostic-tools" style="display:none">
               <textarea id="dp-diagnostic-log" readonly style="width:100%;height:120px;box-sizing:border-box;font-size:11px"></textarea>
@@ -409,6 +410,7 @@
     const hist = document.getElementById("dp-set-history");
     const dlcSet = document.getElementById("dp-set-dlc");
     const roundingSet = document.getElementById("dp-set-rounding");
+    const quickCopySet = document.getElementById("dp-set-quick-copy");
     const diagSet = document.getElementById("dp-set-diagnostic");
     const diagTools = document.getElementById("dp-diagnostic-tools");
     const diagLog = document.getElementById("dp-diagnostic-log");
@@ -418,10 +420,13 @@
     dlcSet.checked = settings.dlcControl;
     diagSet.checked = settings.diagnostic;
     roundingSet.value = ["05", "none"].includes(settings.rounding) ? settings.rounding : "05";
+    quickCopySet.checked = !!settings.quickCopy;
+    document.getElementById("dp-copy-actions").style.display = quickCopySet.checked ? "flex" : "none";
     diagTools.style.display = settings.diagnostic ? "block" : "none";
     diagLog.value = diagnosticText();
-    [vib, snd, hist, dlcSet, diagSet, roundingSet].forEach(el => el.addEventListener("change", () => {
-      saveSettings({vibration:vib.checked, sound:snd.checked, history:hist.checked, dlcControl:dlcSet.checked, diagnostic:diagSet.checked, rounding:roundingSet.value});
+    [vib, snd, hist, dlcSet, diagSet, roundingSet, quickCopySet].forEach(el => el.addEventListener("change", () => {
+      saveSettings({vibration:vib.checked, sound:snd.checked, history:hist.checked, dlcControl:dlcSet.checked, diagnostic:diagSet.checked, rounding:roundingSet.value, quickCopy:quickCopySet.checked});
+      document.getElementById("dp-copy-actions").style.display = quickCopySet.checked ? "flex" : "none";
       calculate();
       diagTools.style.display = diagSet.checked ? "block" : "none";
       if (diagSet.checked) diagnosticLog("Mode diagnostic activé");
