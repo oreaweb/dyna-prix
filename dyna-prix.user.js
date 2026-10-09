@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.11
+// @version      0.8.12
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -17,6 +17,7 @@
   const STORAGE_HISTORY = "dynaprix-history";
   const STORAGE_SETTINGS = "dynaprix-settings";
   const STORAGE_TORCH = "dynaprix-torch";
+  const STORAGE_RECOVERY = "dynaprix-auth-recovery";
   let product = null;
 
   const euro = n => Number(n).toLocaleString("fr-FR", {
@@ -178,7 +179,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.11 • 09/10/2026 15h10 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.12 • 09/10/2026 15h20 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -436,6 +437,20 @@
 
     renderHistory();
     document.getElementById("dp-ean").focus();
+
+    let recovery = null;
+    try { recovery = JSON.parse(sessionStorage.getItem(STORAGE_RECOVERY) || "null"); } catch (_) {}
+    if (recovery?.query && recovery.reloaded === true) {
+      if (Date.now() - Number(recovery.time || 0) < 120000) {
+        const input = document.getElementById("dp-ean");
+        input.value = recovery.query;
+        input.dispatchEvent(new Event("input", {bubbles:true}));
+        diagnosticLog("Après rechargement — reprise automatique de la recherche");
+        setTimeout(() => searchProduct(), 800);
+      } else {
+        sessionStorage.removeItem(STORAGE_RECOVERY);
+      }
+    }
   }
 
   function ean13Bits(ean) {
@@ -697,7 +712,11 @@
       body:"{}"
     });
     diagnosticLog("POST /api/authenticate → HTTP " + r.status);
-    if (!r.ok) throw new Error("Authentification Dynacad refusée (" + r.status + ").");
+    if (!r.ok) {
+      const err = new Error("Authentification Dynacad refusée (" + r.status + ").");
+      err.status = r.status;
+      throw err;
+    }
     const data = await r.json();
     diagnosticLog("Authentification " + (data.id_token ? "réussie — jeton reçu" : "réponse sans jeton"));
     if (!data.id_token) throw new Error("Aucun jeton Dynacad reçu.");
@@ -904,6 +923,21 @@
       };
     } catch (err) {
       diagnosticLog("Erreur — " + err.message);
+      if (err.status === 401) {
+        let recovery = null;
+        try { recovery = JSON.parse(sessionStorage.getItem(STORAGE_RECOVERY) || "null"); } catch (_) {}
+        if (!recovery || recovery.query !== query || recovery.reloaded !== true) {
+          sessionStorage.setItem(STORAGE_RECOVERY, JSON.stringify({query, reloaded:true, time:Date.now()}));
+          status.textContent = "🔄 Session Dynacad expirée — renouvellement en cours…";
+          status.style.color = "#1769e0";
+          status.style.fontWeight = "700";
+          diagnosticLog("401 — recherche mémorisée, rechargement automatique");
+          setTimeout(() => location.reload(), 500);
+          return;
+        }
+        sessionStorage.removeItem(STORAGE_RECOVERY);
+        diagnosticLog("401 après récupération — arrêt pour éviter une boucle");
+      }
       status.textContent = "⚠ " + err.message;
       status.style.color = "#b00020";
       status.style.fontWeight = err.message === "Aucun produit trouvé." ? "800" : "normal";
@@ -911,4 +945,10 @@
   }
 
   addLauncher();
+  try {
+    const recovery = JSON.parse(sessionStorage.getItem(STORAGE_RECOVERY) || "null");
+    if (recovery?.query && recovery.reloaded === true && Date.now() - Number(recovery.time || 0) < 120000) {
+      setTimeout(() => openApp(), 700);
+    }
+  } catch (_) {}
 })();
