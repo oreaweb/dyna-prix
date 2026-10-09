@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.27
+// @version      0.8.28
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -19,6 +19,16 @@
   const STORAGE_TORCH = "dynaprix-torch";
   const STORAGE_RECOVERY = "dynaprix-auth-recovery";
   let product = null;
+  // Statistiques globales : aucun EAN, prix, magasin ni identifiant d'appareil transmis.
+  const STATS_URL = "https://npgxpdcedhmouhduphte.supabase.co/rest/v1/dyna_stats_events";
+  const STATS_KEY = "sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
+  function stat(event) {
+    fetch(STATS_URL, {
+      method:"POST", mode:"cors", keepalive:true,
+      headers:{"apikey":STATS_KEY,"Content-Type":"application/json","Prefer":"return=minimal"},
+      body:JSON.stringify({tool:"prix",event,version:"0.8.28"})
+    }).catch(() => {}); // Ne jamais bloquer le calcul de prix.
+  }
 
   const euro = n => Number(n).toLocaleString("fr-FR", {
     style: "currency", currency: "EUR"
@@ -161,6 +171,7 @@
   }
 
   function openApp() {
+    stat("open");
     const old = document.getElementById("dynaprix-app");
     if (old) {
       if (old.style.display === "none") {
@@ -184,7 +195,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.27 • 09/10/2026 19h15 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.28 • 09/10/2026 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -607,6 +618,7 @@
           const hit = codes.find(c => /^\d{8,14}$/.test(c.rawValue || ""));
           if (hit) {
             scanFeedback();
+            stat("scan");
             document.getElementById("dp-ean").value = hit.rawValue;
             document.getElementById("dp-ean").dispatchEvent(new Event("input", {bubbles:true}));
             stopScanner();
@@ -924,7 +936,7 @@
     displayDlcSection();
     document.getElementById("dp-result").style.display = "block";
     fitProductLabel();
-    calculate(); addHistory(ean);
+    calculate(); stat("price_calculated"); addHistory(ean);
   }
 
   async function loadSearchThumbnail(ean, img, token) {
@@ -954,6 +966,7 @@
     try {
       if (!query) throw new Error("Saisissez un EAN ou un libellé.");
       diagnosticLog("Recherche demandée — " + (isEan ? "EAN" : "libellé"));
+      stat(isEan ? "search_ean" : "search_label");
       const token = await authenticate(), siteEan = getSiteEan();
       const payload = {
         siteEan, pageIndex:0, pageSize:isEan ? 10 : 20,
@@ -971,7 +984,7 @@
         diagnosticLog("Récupération terminée — recherche relancée avec succès");
       }
       const data = await r.json();
-      if (!data.data?.length) throw new Error("Aucun produit trouvé.");
+      if (!data.data?.length) { stat("search_empty"); throw new Error("Aucun produit trouvé."); }
       if (isEan) {
         displayProduct(data.data[0], query, token); status.textContent = "✓ Produit trouvé"; status.style.color = "green"; return;
       }
@@ -1020,6 +1033,7 @@
       };
     } catch (err) {
       diagnosticLog("Erreur — " + err.message);
+      if (err.message !== "Aucun produit trouvé." && err.status !== 401) stat("search_error");
       if (err.status === 401) {
         let recovery = null;
         try { recovery = JSON.parse(sessionStorage.getItem(STORAGE_RECOVERY) || "null"); } catch (_) {}
