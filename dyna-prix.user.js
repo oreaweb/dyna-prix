@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.36
+// @version      0.8.37
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -13,6 +13,30 @@
 (() => {
   "use strict";
 
+
+  const UPDATE_RESTORE_KEY="dynaprix|after-update";
+  function saveUpdateState(){
+    const panel=document.getElementById("dynaprix-app");
+    if(!panel||panel.style.display==="none")return;
+    const query=document.getElementById("dp-ean")?.value||"";
+    const hasResult=document.getElementById("dp-result")?.style.display==="block";
+    sessionStorage.setItem(UPDATE_RESTORE_KEY,JSON.stringify({time:Date.now(),query,hasResult,margin:document.getElementById("dp-margin")?.value||"",scroll:document.getElementById("dp-panel")?.scrollTop||0}));
+  }
+  async function restoreUpdateState(){
+    let state;try{state=JSON.parse(sessionStorage.getItem(UPDATE_RESTORE_KEY)||"null")}catch(_){}
+    sessionStorage.removeItem(UPDATE_RESTORE_KEY);
+    if(!state||Date.now()-state.time>120000)return;
+    openApp();
+    const input=document.getElementById("dp-ean");
+    if(!input)return;
+    input.value=state.query||"";
+    input.dispatchEvent(new Event("input",{bubbles:true}));
+    if(state.margin){const margin=document.getElementById("dp-margin");margin.value=state.margin;margin.dispatchEvent(new Event("input",{bubbles:true}))}
+    if(state.hasResult&&state.query){try{await searchProduct()}catch(_){}}
+    const panel=document.getElementById("dp-panel");
+    if(panel)panel.scrollTop=state.scroll||0;
+  }
+
   const STORAGE_MARGIN = "dynaprix-margin";
   const STORAGE_HISTORY = "dynaprix-history";
   const STORAGE_SETTINGS = "dynaprix-settings";
@@ -23,7 +47,7 @@
   const STATS_URL = "https://npgxpdcedhmouhduphte.supabase.co/rest/v1/dyna_stats_events";
   const STATS_KEY = "sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
   
-const DYNA_SCRIPT_VERSION="0.8.36";
+const DYNA_SCRIPT_VERSION="0.8.37";
 const DYNA_SCRIPT_URL="https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js";
 function dynaVersionParts(v){return String(v).split(".").map(x=>Number(x)||0)}
 function dynaIsNewer(remote,local){const a=dynaVersionParts(remote),b=dynaVersionParts(local);for(let i=0;i<Math.max(a.length,b.length);i++){if((a[i]||0)!==(b[i]||0))return (a[i]||0)>(b[i]||0)}return false}
@@ -55,6 +79,7 @@ async function dynaCheckUpdate(){
       const onReturn=()=>{
         if(done||!away||document.hidden||Date.now()-started<800)return;
         done=true;cleanup();
+        try{saveUpdateState()}catch(_){}
         setTimeout(()=>location.reload(),700);
       };
       const onVisibility=()=>{if(document.hidden)markAway();else onReturn()};
@@ -71,7 +96,7 @@ function stat(event) {
     fetch(STATS_URL, {
       method:"POST", mode:"cors", keepalive:true,
       headers:{"apikey":STATS_KEY,"Content-Type":"application/json","Prefer":"return=minimal"},
-      body:JSON.stringify({tool:"prix",event,version:"0.8.36",terminal_id:statsTerminalId()})
+      body:JSON.stringify({tool:"prix",event,version:"0.8.37",terminal_id:statsTerminalId()})
     }).catch(() => {}); // Ne jamais bloquer le calcul de prix.
   }
 
@@ -241,7 +266,7 @@ function stat(event) {
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.36 • 09/10/2026 21h17 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.37 • 09/10/2026 21h17 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div id="dp-update-banner" style="display:none;margin:9px 0 12px;padding:12px;background:#fff4df;border:1px solid #edc875;border-radius:11px;color:#6e4700;font-size:13px"><div style="font-weight:800;font-size:14px">🔄 Nouvelle version disponible</div><div style="margin:5px 0 10px">Version <b data-new-version></b> disponible. Vous pouvez continuer à utiliser l'outil en attendant.</div><button type="button" style="width:100%;padding:11px;background:#a96508;color:white;border:0;border-radius:9px;font-weight:800;font-size:14px;cursor:pointer">⬇ Mettre à jour maintenant</button></div>
@@ -1104,6 +1129,7 @@ function stat(event) {
   }
 
   addLauncher();
+  if(sessionStorage.getItem(UPDATE_RESTORE_KEY)){setTimeout(()=>restoreUpdateState(),700)}
   try {
     const recovery = JSON.parse(sessionStorage.getItem(STORAGE_RECOVERY) || "null");
     if (recovery?.query && recovery.reloaded === true && Date.now() - Number(recovery.time || 0) < 120000) {
