@@ -1,7 +1,7 @@
 (()=>{"use strict";
   const URL="https://npgxpdcedhmouhduphte.supabase.co";
   const KEY="sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
-  const VERSION="0.3.8";
+  const VERSION="0.3.9";
   let token="";
   let refreshToken="";
   const STORE="dyna_stats_google_session";
@@ -57,7 +57,7 @@
       }).join("");
       const prixCount=sum(current,actions,"prix"),receptionCount=sum(current,actions,"reception"),total=prixCount+receptionCount;
       const split='<div class="ds-meter">'+(prixCount?'<span style="width:'+(prixCount/total*100)+'%;background:'+C.prix+'"></span>':'')+(receptionCount?'<span style="width:'+(receptionCount/total*100)+'%;background:'+C.reception+'"></span>':'')+'</div><div class="ds-line"><span><i class="ds-pill" style="background:'+C.prix+'"></i>Dyna Prix</span><b>'+number(prixCount)+' ('+(total?Math.round(prixCount/total*100):0)+' %)</b></div><div class="ds-line"><span><i class="ds-pill" style="background:'+C.reception+'"></i>Dyna Réception</span><b>'+number(receptionCount)+' ('+(total?Math.round(receptionCount/total*100):0)+' %)</b></div>';
-      const details=[["Recherches EAN",["search_ean"],"prix"],["Recherches par libellé",["search_label"],"prix"],["Recherches sans résultat",["search_empty"],"prix"],["Erreurs de recherche",["search_error"],"prix"],["Scans",["scan"],"prix"],["Calculs de prix",["price_calculated"],"prix"],["Réceptions chargées",["reception_loaded"],"reception"],["Articles contrôlés",["reception_item"],"reception"],["Produits non prévus",["reception_unexpected"],"reception"],["Bilans consultés",["reception_report"],"reception"],["Erreurs de synchronisation",["reception_sync_error"],"reception"]].filter(x=>tool==="all"||x[2]===tool);
+      const details=[["Recherches EAN",["search_ean"],"prix"],["Recherches par libellé",["search_label"],"prix"],["Recherches sans résultat",["search_empty"],"prix"],["Erreurs de recherche",["search_error"],"prix"],["Scans",["scan"],"prix"],["Réceptions chargées",["reception_loaded"],"reception"],["Articles contrôlés",["reception_item"],"reception"],["Produits non prévus",["reception_unexpected"],"reception"],["Bilans consultés",["reception_report"],"reception"],["Erreurs de synchronisation",["reception_sync_error"],"reception"]].filter(x=>tool==="all"||x[2]===tool);
       const detailHtml=details.map(([name,events,t])=>'<div class="ds-line"><span>'+name+'</span><b>'+number(count(events,t))+'</b></div>').join("");
       const versions=new Map();
       current.forEach(r=>{if(r.event!=="open")return;const key=(r.tool==="prix"?"Dyna Prix ":"Dyna Réception ")+(r.version||"inconnue");versions.set(key,(versions.get(key)||0)+Number(r.total||0))});
