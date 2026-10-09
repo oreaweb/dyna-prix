@@ -1,7 +1,7 @@
 (()=>{"use strict";
   const URL="https://npgxpdcedhmouhduphte.supabase.co";
   const KEY="sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
-  const VERSION="0.5.0";
+  const VERSION="0.6.0";
   let token="";
   let refreshToken="";
   const STORE="dyna_stats_google_session";
@@ -50,6 +50,11 @@
       if(!Array.isArray(rows))throw Error("Réponse inattendue");
       const activity=await request("/rest/v1/rpc/dyna_stats_activity_range",{method:"POST",body:JSON.stringify({date_from:start,date_to:end})});
       if(!Array.isArray(activity))throw Error("Réponse horaire inattendue");
+      const [terminals,names]=await Promise.all([
+        request("/rest/v1/rpc/dyna_stats_terminals_range",{method:"POST",body:JSON.stringify({date_from:start,date_to:end})}),
+        request("/rest/v1/dyna_stats_terminal_names?select=terminal_id,name")
+      ]);
+      if(!Array.isArray(terminals)||!Array.isArray(names))throw Error("Réponse terminaux inattendue");
       const filtered=rows.filter(r=>tool==="all"||r.tool===tool);
       const current=filtered.filter(r=>r.day>=start&&r.day<=end);
       const previous=filtered.filter(r=>r.day>=previousStart&&r.day<start);
@@ -85,9 +90,39 @@
       const estimatedSuccess=Math.max(0,attempts-noResult-searchErrors);
       const successRate=attempts?Math.round(estimatedSuccess/attempts*100):null;
       const successHtml=tool==="reception"?'':'<section class="ds-section"><h3>Réussite des recherches Dyna Prix</h3><div class="ds-kpis"><div class="ds-kpi"><small>Taux de réussite estimé</small><strong>'+(successRate===null?'—':successRate+' %')+'</strong><em>'+number(attempts)+' recherches</em></div><div class="ds-kpi"><small>Sans résultat</small><strong>'+number(noResult)+'</strong></div><div class="ds-kpi"><small>En erreur</small><strong>'+number(searchErrors)+'</strong></div></div><p class="ds-muted">Estimation fondée sur les événements enregistrés : les recherches et leurs résultats ne sont pas reliés individuellement. Une même recherche peut produire plusieurs événements.</p></section>';
+      const aliases=new Map(names.map(r=>[r.terminal_id,r.name]));
+      const terminalsById=new Map();
+      terminals.filter(r=>tool==="all"||r.tool===tool).forEach(r=>{
+        const id=r.terminal_id;if(!id)return;
+        const old=terminalsById.get(id)||{id,actions:0,last_seen:"",tools:new Set(),versions:new Set()};
+        old.actions+=Number(r.actions)||0;old.tools.add(r.tool);if(r.version)old.versions.add((r.tool==="prix"?"Prix ":"Réception ")+r.version);
+        if(r.last_seen>old.last_seen)old.last_seen=r.last_seen;
+        terminalsById.set(id,old);
+      });
+      const terminalList=[...terminalsById.values()].sort((a,b)=>b.actions-a.actions);
+      const terminalHtml='<section class="ds-section"><h3>Terminaux actifs ('+number(terminalList.length)+')</h3><p class="ds-muted">Identifiants anonymes générés par installation. Les nouveaux terminaux apparaissent après mise à jour des scripts Dyna Prix et Dyna Réception. Les données antérieures ne peuvent pas être attribuées à un terminal.</p>'+(terminalList.length?terminalList.map(t=>{
+        const title=aliases.get(t.id)||"Terminal "+t.id.slice(0,8).toUpperCase();
+        const when=new Date(t.last_seen).toLocaleString("fr-FR",{timeZone:"Europe/Paris",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+        return '<div class="ds-line"><div style="min-width:0"><b>'+esc(title)+'</b><div class="ds-muted">Code '+esc(t.id.slice(0,8).toUpperCase())+' · '+esc([...t.tools].map(v=>v==="prix"?"Prix":"Réception").join(" + "))+' · '+number(t.actions)+' événements</div><div class="ds-muted">Dernière activité : '+esc(when)+' · '+esc([...t.versions].join(", "))+'</div></div><button type="button" class="ds-rename" data-terminal="'+esc(t.id)+'" style="padding:7px 10px;cursor:pointer;flex-shrink:0">Renommer</button></div>';
+      }).join(""):'<p class="ds-muted">Aucun terminal identifié sur cette période.</p>')+'</section>';
       const fail=count(["search_error"],"prix"),found=count(searches,"prix"),missing=count(["search_empty"],"prix");
       const insight=tool==="reception"?'Les articles contrôlés comptent les actions de contrôle, pas nécessairement les articles distincts.':found?'Sur '+number(found)+' recherches, '+number(missing)+' ont été signalées sans résultat et '+number(fail)+' ont généré une erreur. Les événements peuvent se recouper.':'Aucune recherche de prix enregistrée sur cette période.';
-      $("ds-content").innerHTML='<p class="ds-muted">Du '+start.split("-").reverse().join("/")+' au '+end.split("-").reverse().join("/")+' · Comparaison avec les '+days+' jours précédents</p><div class="ds-kpis">'+cards+'</div><section class="ds-section"><h3>Activité quotidienne</h3><p class="ds-muted">'+(tool!=="reception"?'<i class="ds-pill" style="background:'+C.prix+'"></i>Dyna Prix':'')+(tool==="all"?' &nbsp; ':'')+(tool!=="prix"?'<i class="ds-pill" style="background:'+C.reception+'"></i>Dyna Réception':'')+' · Actions enregistrées</p><div class="ds-chart">'+graph+'</div></section><div class="ds-columns">'+(tool==="all"?'<section class="ds-section"><h3>Répartition de l’activité</h3>'+split+'</section>':'')+'<section class="ds-section"><h3>Qualité et utilisation</h3><p class="ds-note ds-muted">'+insight+'</p><p class="ds-muted">Erreurs enregistrées : <b>'+number(count(errors))+'</b> · Évolution vs période précédente : <b>'+(delta(count(errors),before(errors))===null?'non calculable':delta(count(errors),before(errors))+' %')+'</b></p></section></div>'+successHtml+'<div class="ds-columns"><section class="ds-section"><h3>Activité par heure</h3>'+hoursHtml+'</section><section class="ds-section"><h3>Activité par jour de semaine</h3>'+weekdaysHtml+'</section></div><div class="ds-columns"><section class="ds-section"><h3>Détail des fonctionnalités</h3>'+detailHtml+'</section><section class="ds-section"><h3>Versions actives</h3><p class="ds-muted">Nombre d’ouvertures par version, et non nombre d’utilisateurs ou d’installations.</p>'+versionsHtml+'</section></div><p class="ds-muted ds-section">Les chiffres proviennent des événements remontés par les outils. Ils ne permettent pas de compter les utilisateurs uniques. Les données de la journée sont partielles et la comparaison se fait par journées calendaires (heure de Paris).</p>';if($("ds-updated"))$("ds-updated").textContent="Actualisé à "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+      $("ds-content").innerHTML='<p class="ds-muted">Du '+start.split("-").reverse().join("/")+' au '+end.split("-").reverse().join("/")+' · Comparaison avec les '+days+' jours précédents</p><div class="ds-kpis">'+cards+'</div><section class="ds-section"><h3>Activité quotidienne</h3><p class="ds-muted">'+(tool!=="reception"?'<i class="ds-pill" style="background:'+C.prix+'"></i>Dyna Prix':'')+(tool==="all"?' &nbsp; ':'')+(tool!=="prix"?'<i class="ds-pill" style="background:'+C.reception+'"></i>Dyna Réception':'')+' · Actions enregistrées</p><div class="ds-chart">'+graph+'</div></section><div class="ds-columns">'+(tool==="all"?'<section class="ds-section"><h3>Répartition de l’activité</h3>'+split+'</section>':'')+'<section class="ds-section"><h3>Qualité et utilisation</h3><p class="ds-note ds-muted">'+insight+'</p><p class="ds-muted">Erreurs enregistrées : <b>'+number(count(errors))+'</b> · Évolution vs période précédente : <b>'+(delta(count(errors),before(errors))===null?'non calculable':delta(count(errors),before(errors))+' %')+'</b></p></section></div>'+successHtml+'<div class="ds-columns"><section class="ds-section"><h3>Activité par heure</h3>'+hoursHtml+'</section><section class="ds-section"><h3>Activité par jour de semaine</h3>'+weekdaysHtml+'</section></div><div class="ds-columns"><section class="ds-section"><h3>Détail des fonctionnalités</h3>'+detailHtml+'</section><section class="ds-section"><h3>Versions actives</h3><p class="ds-muted">Nombre d’ouvertures par version, et non nombre d’utilisateurs ou d’installations.</p>'+versionsHtml+'</section></div>'+terminalHtml+'<p class="ds-muted ds-section">Les chiffres proviennent des événements remontés par les outils. Ils ne permettent pas de compter les utilisateurs uniques. Les données de la journée sont partielles et la comparaison se fait par journées calendaires (heure de Paris).</p>';$("ds-content").querySelectorAll(".ds-rename").forEach(button=>button.onclick=async()=>{
+        const id=button.dataset.terminal,existing=aliases.get(id)||"";
+        const name=prompt("Nom du terminal (laisser vide pour rétablir le code automatique) :",existing);
+        if(name===null)return;
+        const trimmed=name.trim();
+        if(trimmed.length>60){alert("Le nom ne peut pas dépasser 60 caractères.");return}
+        button.disabled=true;
+        try{
+          if(trimmed){
+            await request("/rest/v1/dyna_stats_terminal_names?on_conflict=terminal_id",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({terminal_id:id,name:trimmed})});
+          }else{
+            await request("/rest/v1/dyna_stats_terminal_names?terminal_id=eq."+encodeURIComponent(id),{method:"DELETE"});
+          }
+          loading=false;await load();
+        }catch(e){alert("Impossible d’enregistrer le nom : "+e.message);button.disabled=false}
+      });if($("ds-updated"))$("ds-updated").textContent="Actualisé à "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
     }catch(e){$("ds-content").innerHTML='<p style="color:#b00020">Accès impossible (v'+VERSION+') : '+esc(e.message)+'</p><button id="ds-retry">Réessayer</button>';$("ds-retry").onclick=load}finally{loading=false}
   }
   function open(){
