@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.28
+// @version      0.8.29
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -22,11 +22,12 @@
   // Statistiques globales : aucun EAN, prix, magasin ni identifiant d'appareil transmis.
   const STATS_URL = "https://npgxpdcedhmouhduphte.supabase.co/rest/v1/dyna_stats_events";
   const STATS_KEY = "sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
-  function stat(event) {
+  function statsTerminalId(){const key="dyna|stats_terminal_id";let id=localStorage.getItem(key);if(!id){id=crypto.randomUUID?crypto.randomUUID():"10000000-1000-4000-8000-100000000000".replace(/[018]/g,c=>(Number(c)^crypto.getRandomValues(new Uint8Array(1))[0]&(15>>Number(c)/4)).toString(16));localStorage.setItem(key,id)}return id}
+function stat(event) {
     fetch(STATS_URL, {
       method:"POST", mode:"cors", keepalive:true,
       headers:{"apikey":STATS_KEY,"Content-Type":"application/json","Prefer":"return=minimal"},
-      body:JSON.stringify({tool:"prix",event,version:"0.8.28"})
+      body:JSON.stringify({tool:"prix",event,version:"0.8.29",terminal_id:statsTerminalId()})
     }).catch(() => {}); // Ne jamais bloquer le calcul de prix.
   }
 
