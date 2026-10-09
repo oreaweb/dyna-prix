@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.8
+// @version      0.8.9
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -159,7 +159,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.8 • 09/10/2026 14h40 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.9 • 09/10/2026 14h50 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -800,19 +800,41 @@
       }
       const list = [], seen = new Set();
       for (const p of data.data) { const key = String(p.ean || ""); if (key && !seen.has(key)) { seen.add(key); list.push(p); } }
-      results.innerHTML = list.map((p,i) => {
-        const brand = p.brandDesc || p.brand || "";
-        return '<div data-result-index="'+i+'" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #eee;cursor:pointer">'+
-          '<div style="width:64px;height:52px;flex:0 0 64px;border-radius:8px;background:#f3f5f8;overflow:hidden;display:flex;align-items:center;justify-content:center">'+
-            '<img data-photo-ean="'+escapeHtml(p.ean||"")+'" alt="" style="display:block;width:100%;height:100%;object-fit:contain;background:#fff">'+
-            '<div data-photo-fallback style="display:none;width:100%;height:100%;align-items:center;justify-content:center;color:#a0a8b5;font-size:22px">▧</div>'+
-          '</div>'+
-          '<div style="min-width:0;flex:1"><b>'+escapeHtml((brand ? brand+" • " : "")+(p.label||"Produit"))+'</b><br><small style="color:#687386">EAN '+escapeHtml(p.ean||"")+' • Prix d’achat HT '+escapeHtml(euro(p.purchasePrice))+'</small></div></div>';
-      }).join("");
-      results.style.display = "block";
-      results.querySelectorAll("img[data-photo-ean]").forEach(img => loadSearchThumbnail(img.dataset.photoEan, img, token));
-      status.textContent = list.length + " produit" + (list.length > 1 ? "s" : "") + " trouvé" + (list.length > 1 ? "s" : "") + " — choisissez un produit.";
-      results.onclick = ev => {
+      const total = Number(data.total) || list.length;
+      let nextPage = 1;
+      const renderResults = () => {
+        results.innerHTML = list.map((p,i) => {
+          const brand = p.brandDesc || p.brand || "";
+          return '<div data-result-index="'+i+'" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #eee;cursor:pointer">'+
+            '<div style="width:64px;height:52px;flex:0 0 64px;border-radius:8px;background:#f3f5f8;overflow:hidden;display:flex;align-items:center;justify-content:center">'+
+              '<img data-photo-ean="'+escapeHtml(p.ean||"")+'" alt="" style="display:block;width:100%;height:100%;object-fit:contain;background:#fff">'+
+              '<div data-photo-fallback style="display:none;width:100%;height:100%;align-items:center;justify-content:center;color:#a0a8b5;font-size:22px">▧</div>'+
+            '</div>'+
+            '<div style="min-width:0;flex:1"><b>'+escapeHtml((brand ? brand+" • " : "")+(p.label||"Produit"))+'</b><br><small style="color:#687386">EAN '+escapeHtml(p.ean||"")+' • Prix d’achat HT '+escapeHtml(euro(p.purchasePrice))+'</small></div></div>';
+        }).join("") + (nextPage * 20 < total ? '<button id="dp-load-more" type="button" style="width:100%;padding:12px;border:0;border-top:1px solid #ddd;background:#f3f6fa;color:#0050a4;font-weight:700;cursor:pointer">Afficher + de résultats</button>' : "");
+        results.style.display = "block";
+        results.querySelectorAll("img[data-photo-ean]").forEach(img => loadSearchThumbnail(img.dataset.photoEan, img, token));
+        status.textContent = list.length + " produit" + (list.length > 1 ? "s" : "") + " affiché" + (list.length > 1 ? "s" : "") + (total > list.length ? " sur " + total : "") + " — choisissez un produit.";
+      };
+      renderResults();
+      results.onclick = async ev => {
+        const more = ev.target.closest("#dp-load-more");
+        if (more) {
+          more.disabled = true; more.textContent = "Chargement…";
+          try {
+            const morePayload = {...payload, pageIndex:nextPage, pageSize:20};
+            const mr = await fetch("/api/products/search", {method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify(morePayload)});
+            if (!mr.ok) throw new Error("Recherche Dynacad impossible (" + mr.status + ").");
+            const md = await mr.json();
+            for (const p of (md.data || [])) { const key = String(p.ean || ""); if (key && !seen.has(key)) { seen.add(key); list.push(p); } }
+            nextPage++;
+            renderResults();
+          } catch (err) {
+            more.disabled = false; more.textContent = "Afficher + de résultats";
+            status.textContent = "⚠ " + err.message; status.style.color = "#b00020";
+          }
+          return;
+        }
         const row = ev.target.closest("[data-result-index]"); if (!row) return;
         const p = list[Number(row.dataset.resultIndex)]; if (!p) return;
         const input = document.getElementById("dp-ean"); input.value = String(p.ean || ""); input.dispatchEvent(new Event("input",{bubbles:true}));
