@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Stats
 // @namespace    local.dynastats
-// @version      0.1.2
+// @version      0.1.3
 // @description  Statistiques globales Dyna Prix et Dyna Réception — accès administrateur.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-stats.user.js
@@ -13,7 +13,7 @@
   "use strict";
   const URL="https://npgxpdcedhmouhduphte.supabase.co";
   const KEY="sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
-  const VERSION="0.1.2";
+  const VERSION="0.1.3";
   let token="";
   let refreshToken="";
   let panel=null;
@@ -66,6 +66,7 @@
   const launch=document.createElement("button");
   launch.textContent="📊 Stats";launch.id="ds-launch";
   launch.style.cssText="position:fixed;right:18px;bottom:90px;z-index:999997;background:#26364f;color:white;border:0;border-radius:999px;padding:12px 16px;font-weight:700;box-shadow:0 4px 18px #0004;cursor:pointer";
-  launch.onclick=open;document.body.appendChild(launch);
+  // Bouton masqué : le tableau de bord est désormais accessible sur GitHub Pages.
+  // Supprime ou désactive ce userscript dans Tampermonkey si tu ne l’utilises plus.
 
 })();
