@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.0
+// @version      0.8.1
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -159,7 +159,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.0 • 09/10/2026 13h20 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.1 • 09/10/2026 13h30 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -700,6 +700,23 @@
     calculate(); addHistory(ean);
   }
 
+  async function loadSearchThumbnail(ean, img, token) {
+    try {
+      const r = await fetch("/api/pictures/" + encodeURIComponent(ean) + "/quality/miniature", {
+        credentials:"include",
+        headers:{"Authorization":"Bearer " + token}
+      });
+      if (!r.ok) throw new Error("Miniature " + r.status);
+      const pic = await r.json();
+      if (!pic?.data) throw new Error("Miniature vide");
+      img.src = "data:" + (pic.contentType || "image/jpeg") + ";base64," + pic.data;
+    } catch (_) {
+      img.style.display = "none";
+      const fallback = img.parentElement?.querySelector("[data-photo-fallback]");
+      if (fallback) fallback.style.display = "flex";
+    }
+  }
+
   async function searchProduct() {
     const status = document.getElementById("dp-status"), result = document.getElementById("dp-result"), results = document.getElementById("dp-search-results");
     const query = document.getElementById("dp-ean").value.trim(), isEan = /^\d{8,14}$/.test(query);
@@ -724,9 +741,15 @@
       for (const p of data.data) { const key = String(p.ean || ""); if (key && !seen.has(key)) { seen.add(key); list.push(p); } }
       results.innerHTML = list.map((p,i) => {
         const brand = p.brandDesc || p.brand || "";
-        return '<div data-result-index="'+i+'" style="padding:10px 12px;border-bottom:1px solid #eee;cursor:pointer"><b>'+escapeHtml((brand ? brand+" • " : "")+(p.label||"Produit"))+'</b><br><small style="color:#687386">EAN '+escapeHtml(p.ean||"")+' • Prix vente '+escapeHtml(euro(p.salePriceTTC))+'</small></div>';
+        return '<div data-result-index="'+i+'" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #eee;cursor:pointer">'+
+          '<div style="width:64px;height:52px;flex:0 0 64px;border-radius:8px;background:#f3f5f8;overflow:hidden;display:flex;align-items:center;justify-content:center">'+
+            '<img data-photo-ean="'+escapeHtml(p.ean||"")+'" alt="" style="display:block;width:100%;height:100%;object-fit:contain;background:#fff">'+
+            '<div data-photo-fallback style="display:none;width:100%;height:100%;align-items:center;justify-content:center;color:#a0a8b5;font-size:22px">▧</div>'+
+          '</div>'+
+          '<div style="min-width:0;flex:1"><b>'+escapeHtml((brand ? brand+" • " : "")+(p.label||"Produit"))+'</b><br><small style="color:#687386">EAN '+escapeHtml(p.ean||"")+' • Prix vente '+escapeHtml(euro(p.salePriceTTC))+'</small></div></div>';
       }).join("");
       results.style.display = "block";
+      results.querySelectorAll("img[data-photo-ean]").forEach(img => loadSearchThumbnail(img.dataset.photoEan, img, token));
       status.textContent = list.length + " produit" + (list.length > 1 ? "s" : "") + " trouvé" + (list.length > 1 ? "s" : "") + " — choisissez un produit.";
       results.onclick = ev => {
         const row = ev.target.closest("[data-result-index]"); if (!row) return;
