@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.32
+// @version      0.8.33
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -23,7 +23,7 @@
   const STATS_URL = "https://npgxpdcedhmouhduphte.supabase.co/rest/v1/dyna_stats_events";
   const STATS_KEY = "sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
   
-const DYNA_SCRIPT_VERSION="0.8.32";
+const DYNA_SCRIPT_VERSION="0.8.33";
 const DYNA_SCRIPT_URL="https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js";
 function dynaVersionParts(v){return String(v).split(".").map(x=>Number(x)||0)}
 function dynaIsNewer(remote,local){const a=dynaVersionParts(remote),b=dynaVersionParts(local);for(let i=0;i<Math.max(a.length,b.length);i++){if((a[i]||0)!==(b[i]||0))return (a[i]||0)>(b[i]||0)}return false}
@@ -40,7 +40,29 @@ async function dynaCheckUpdate(){
     if(!found||!dynaIsNewer(found[1],DYNA_SCRIPT_VERSION)){banner.style.display="none";return}
     banner.style.display="block";
     banner.querySelector("[data-new-version]").textContent=found[1];
-    banner.querySelector("button").onclick=()=>window.open(DYNA_SCRIPT_URL,"_blank","noopener,noreferrer");
+    banner.querySelector("button").onclick=()=>{
+      // Le navigateur ne permet pas de connaître la confirmation Tampermonkey.
+      // On actualise uniquement au retour sur Dynacad après ouverture de l'installation.
+      const popup=window.open(DYNA_SCRIPT_URL,"_blank","noopener,noreferrer");
+      if(popup===null)return;
+      let leftPage=false,done=false;
+      const started=Date.now();
+      const markAway=()=>{leftPage=true};
+      const onVisibility=()=>{if(document.hidden)markAway();else onReturn()};
+      const onReturn=()=>{
+        if(done||!leftPage||document.hidden||Date.now()-started<1500)return;
+        done=true;
+        window.removeEventListener("blur",markAway);
+        window.removeEventListener("focus",onReturn);
+        document.removeEventListener("visibilitychange",onVisibility);
+        setTimeout(()=>location.reload(),900);
+      };
+      window.addEventListener("blur",markAway);
+      window.addEventListener("focus",onReturn);
+      document.addEventListener("visibilitychange",onVisibility);
+      // Ne conserve pas des écouteurs actifs indéfiniment si l'utilisateur ne revient pas.
+      setTimeout(()=>{if(!done){window.removeEventListener("blur",markAway);window.removeEventListener("focus",onReturn);document.removeEventListener("visibilitychange",onVisibility)}},10*60*1000);
+    };
   }catch(_){/* Réseau indisponible : aucune interruption de l'outil. */}
 }
 function statsTerminalId(){const key="dyna|stats_terminal_id";let id=localStorage.getItem(key);if(!id){id=crypto.randomUUID?crypto.randomUUID():"10000000-1000-4000-8000-100000000000".replace(/[018]/g,c=>(Number(c)^crypto.getRandomValues(new Uint8Array(1))[0]&(15>>Number(c)/4)).toString(16));localStorage.setItem(key,id)}return id}
@@ -48,7 +70,7 @@ function stat(event) {
     fetch(STATS_URL, {
       method:"POST", mode:"cors", keepalive:true,
       headers:{"apikey":STATS_KEY,"Content-Type":"application/json","Prefer":"return=minimal"},
-      body:JSON.stringify({tool:"prix",event,version:"0.8.32",terminal_id:statsTerminalId()})
+      body:JSON.stringify({tool:"prix",event,version:"0.8.33",terminal_id:statsTerminalId()})
     }).catch(() => {}); // Ne jamais bloquer le calcul de prix.
   }
 
@@ -218,7 +240,7 @@ function stat(event) {
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.32 • 09/10/2026 21h17 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.33 • 09/10/2026 21h17 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div id="dp-update-banner" style="display:none;margin:9px 0 12px;padding:12px;background:#fff4df;border:1px solid #edc875;border-radius:11px;color:#6e4700;font-size:13px"><div style="font-weight:800;font-size:14px">🔄 Nouvelle version disponible</div><div style="margin:5px 0 10px">Version <b data-new-version></b> disponible. Vous pouvez continuer à utiliser l'outil en attendant.</div><button type="button" style="width:100%;padding:11px;background:#a96508;color:white;border:0;border-radius:9px;font-weight:800;font-size:14px;cursor:pointer">⬇ Mettre à jour maintenant</button></div>
