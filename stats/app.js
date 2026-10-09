@@ -1,7 +1,7 @@
 (()=>{"use strict";
   const URL="https://npgxpdcedhmouhduphte.supabase.co";
   const KEY="sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
-  const VERSION="0.3.7";
+  const VERSION="0.3.8";
   let token="";
   let refreshToken="";
   const STORE="dyna_stats_google_session";
@@ -43,7 +43,7 @@
       const previous=filtered.filter(r=>r.day>=previousStart&&r.day<start);
       const count=(e,t)=>sum(current,e,t),before=(e,t)=>sum(previous,e,t);
       const searches=["search_ean","search_label"],errors=["search_error","reception_sync_error"],actions=["search_ean","search_label","scan","price_calculated","reception_loaded","reception_item","reception_unexpected","reception_report"];
-      const focus=tool==="reception"?[["Réceptions chargées",["reception_loaded"],"reception"],["Articles contrôlés",["reception_item"],"reception"],["Produits non prévus",["reception_unexpected"],"reception"],["Erreurs de synchronisation",["reception_sync_error"],"reception"]]:tool==="prix"?[["Recherches effectuées",searches,"prix"],["Scans",["scan"],"prix"],["Calculs de prix",["price_calculated"],"prix"],["Recherches sans résultat",["search_empty"],"prix"]]:[["Recherches de prix",searches,"prix"],["Articles contrôlés",["reception_item"],"reception"],["Réceptions chargées",["reception_loaded"],"reception"],["Calculs de prix",["price_calculated"],"prix"]];
+      const focus=tool==="reception"?[["Réceptions chargées",["reception_loaded"],"reception"],["Articles contrôlés",["reception_item"],"reception"],["Produits non prévus",["reception_unexpected"],"reception"],["Erreurs de synchronisation",["reception_sync_error"],"reception"]]:tool==="prix"?[["Recherches effectuées",searches,"prix"],["Scans",["scan"],"prix"],["Erreurs de recherche",["search_error"],"prix"],["Recherches sans résultat",["search_empty"],"prix"]]:[["Recherches de prix",searches,"prix"],["Articles contrôlés",["reception_item"],"reception"],["Réceptions chargées",["reception_loaded"],"reception"],["Calculs de prix",["price_calculated"],"prix"]];
       const cards=focus.map(([name,events,t])=>kpi(name,count(events,t),"Sur la période",delta(count(events,t),before(events,t)))).join("");
       const daysList=Array.from({length:days},(_,i)=>shiftDate(start,i));
       const perDay=daysList.map(day=>({day,prix:sum(current.filter(r=>r.day===day),actions,"prix"),reception:sum(current.filter(r=>r.day===day),actions,"reception")}));
