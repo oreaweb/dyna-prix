@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.22
+// @version      0.8.23
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -43,7 +43,7 @@
   }
 
   function getSettings() {
-    const defaults = { vibration:true, sound:false, history:true, dlcControl:false, diagnostic:false, rounding:"05", quickCopy:false };
+    const defaults = { vibration:true, sound:false, history:true, dlcControl:false, diagnostic:false, rounding:"none", quickCopy:false };
     try { return {...defaults, ...JSON.parse(localStorage.getItem(STORAGE_SETTINGS) || "{}")}; }
     catch (_) { return defaults; }
   }
@@ -184,7 +184,7 @@
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.22 • 09/10/2026 17h01 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.23 • 09/10/2026 17h04 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div style="color:#687386;margin:3px 0 11px">Recherche et calcul de prix</div>
@@ -300,8 +300,8 @@
             <label><input id="dp-set-dlc" type="checkbox"> Activer le contrôle DLC</label>
             <label>Arrondi intelligent du prix TTC
               <select id="dp-set-rounding" style="display:block;width:100%;margin-top:5px;padding:8px;border:1px solid #bbb;border-radius:8px">
+                <option value="none">Prix exact (par défaut)</option>
                 <option value="05">Arrondir aux 0 ou 5 centimes supérieurs</option>
-                <option value="none">Désactivé (prix exact)</option>
               </select>
             </label>
             <label><input id="dp-set-quick-copy" type="checkbox"> Afficher les boutons de copie rapide (prix et EAN)</label>
@@ -419,7 +419,7 @@
     hist.checked = settings.history;
     dlcSet.checked = settings.dlcControl;
     diagSet.checked = settings.diagnostic;
-    roundingSet.value = ["05", "none"].includes(settings.rounding) ? settings.rounding : "05";
+    roundingSet.value = ["05", "none"].includes(settings.rounding) ? settings.rounding : "none";
     quickCopySet.checked = !!settings.quickCopy;
     document.getElementById("dp-copy-actions").style.display = quickCopySet.checked ? "flex" : "none";
     diagTools.style.display = settings.diagnostic ? "block" : "none";
