@@ -1,7 +1,7 @@
 (()=>{"use strict";
   const URL="https://npgxpdcedhmouhduphte.supabase.co";
   const KEY="sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
-  const VERSION="0.3.4";
+  const VERSION="0.3.5";
   let token="";
   let refreshToken="";
   const STORE="dyna_stats_google_session";
@@ -47,9 +47,14 @@
       const cards=focus.map(([name,events,t])=>kpi(name,count(events,t),"Sur la période",delta(count(events,t),before(events,t)))).join("");
       const daysList=Array.from({length:days},(_,i)=>shiftDate(start,i));
       const perDay=daysList.map(day=>({day,prix:sum(current.filter(r=>r.day===day),actions,"prix"),reception:sum(current.filter(r=>r.day===day),actions,"reception")}));
-      const max=Math.max(1,...perDay.map(r=>r.prix+r.reception));
+      const max=Math.max(1,...perDay.map(r=>Math.max(r.prix,r.reception)));
       const stride=days<=7?1:days<=30?5:15;
-      const graph=perDay.map((r,i)=>{const h=(r.prix+r.reception)/max*130;return '<div class="ds-day" title="'+esc(r.day)+': '+number(r.prix)+' Prix, '+number(r.reception)+' Réception"><div class="ds-stack" style="height:'+Math.max(1,h)+'px">'+(r.prix?'<div class="ds-segment" style="height:'+(r.prix/(r.prix+r.reception)*100)+'%;background:'+C.prix+'"></div>':'')+(r.reception?'<div class="ds-segment" style="height:'+(r.reception/(r.prix+r.reception)*100)+'%;background:'+C.reception+'"></div>':'')+'</div><span class="ds-day-label">'+(i%stride===0?r.day.slice(8,10)+'/'+r.day.slice(5,7):'')+'</span></div>'}).join("");
+      const graph=perDay.map((r,i)=>{
+        const bar=(value,color)=>'<div style="flex:1;max-width:17px;height:'+Math.max(value?2:0,Math.round(value/max*130))+'px;background:'+color+';border-radius:4px 4px 0 0"></div>';
+        const bars=(tool!=="reception"?bar(r.prix,C.prix):"")+(tool!=="prix"?bar(r.reception,C.reception):"");
+        const tip=r.day+": "+(tool!=="reception"?number(r.prix)+" Dyna Prix":"")+(tool==="all"?", ":"")+(tool!=="prix"?number(r.reception)+" Dyna Réception":"");
+        return '<div class="ds-day" title="'+esc(tip)+'"><div style="height:130px;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:3px">'+bars+'</div><span class="ds-day-label">'+(i%stride===0?r.day.slice(8,10)+"/"+r.day.slice(5,7):"")+'</span></div>';
+      }).join("");
       const prixCount=sum(current,actions,"prix"),receptionCount=sum(current,actions,"reception"),total=prixCount+receptionCount;
       const split='<div class="ds-meter">'+(prixCount?'<span style="width:'+(prixCount/total*100)+'%;background:'+C.prix+'"></span>':'')+(receptionCount?'<span style="width:'+(receptionCount/total*100)+'%;background:'+C.reception+'"></span>':'')+'</div><div class="ds-line"><span><i class="ds-pill" style="background:'+C.prix+'"></i>Dyna Prix</span><b>'+number(prixCount)+' ('+(total?Math.round(prixCount/total*100):0)+' %)</b></div><div class="ds-line"><span><i class="ds-pill" style="background:'+C.reception+'"></i>Dyna Réception</span><b>'+number(receptionCount)+' ('+(total?Math.round(receptionCount/total*100):0)+' %)</b></div>';
       const details=[["Recherches EAN",["search_ean"],"prix"],["Recherches par libellé",["search_label"],"prix"],["Recherches sans résultat",["search_empty"],"prix"],["Erreurs de recherche",["search_error"],"prix"],["Scans",["scan"],"prix"],["Calculs de prix",["price_calculated"],"prix"],["Réceptions chargées",["reception_loaded"],"reception"],["Articles contrôlés",["reception_item"],"reception"],["Produits non prévus",["reception_unexpected"],"reception"],["Bilans consultés",["reception_report"],"reception"],["Erreurs de synchronisation",["reception_sync_error"],"reception"]].filter(x=>tool==="all"||x[2]===tool);
