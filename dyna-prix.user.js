@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dyna Prix
 // @namespace    local.dynaprix
-// @version      0.8.49
+// @version      0.8.50
 // @description  Recherche/scan EAN Dynacad et calcule un prix de vente TTC à partir du prix d'achat HT, de la TVA et de la majoration.
 // @match        https://dynacad.carrefour.com/*
 // @updateURL    https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js
@@ -47,7 +47,7 @@
   const STATS_URL = "https://npgxpdcedhmouhduphte.supabase.co/rest/v1/dyna_stats_events";
   const STATS_KEY = "sb_publishable_F03AVvc9_J9CiMDzrPKDzQ_wczs5Zfp";
   
-const DYNA_SCRIPT_VERSION="0.8.49";
+const DYNA_SCRIPT_VERSION="0.8.50";
 const DYNA_SCRIPT_URL="https://raw.githubusercontent.com/oreaweb/dyna-prix/main/dyna-prix.user.js";
 function dynaVersionParts(v){return String(v).split(".").map(x=>Number(x)||0)}
 function dynaIsNewer(remote,local){const a=dynaVersionParts(remote),b=dynaVersionParts(local);for(let i=0;i<Math.max(a.length,b.length);i++){if((a[i]||0)!==(b[i]||0))return (a[i]||0)>(b[i]||0)}return false}
@@ -93,7 +93,7 @@ function stat(event) {
     fetch(STATS_URL, {
       method:"POST", mode:"cors", keepalive:true,
       headers:{"apikey":STATS_KEY,"Content-Type":"application/json","Prefer":"return=minimal"},
-      body:JSON.stringify({tool:"prix",event,version:"0.8.49",terminal_id:statsTerminalId()})
+      body:JSON.stringify({tool:"prix",event,version:"0.8.50",terminal_id:statsTerminalId()})
     }).catch(() => {}); // Ne jamais bloquer le calcul de prix.
   }
 
@@ -263,7 +263,7 @@ function stat(event) {
         padding:14px 16px;border-radius:16px;box-shadow:0 8px 35px rgba(0,0,0,.28);
         font-family:Arial,sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.49 • 09/10/2026 23h10 <span id="dp-site-ean"></span></span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><h2 style="margin:0">🛒 Dyna Prix</h2><span style="font-size:11px;color:#8a94a6;font-weight:normal">v0.8.50 • 11/10/2026 19h38 <span id="dp-site-ean"></span></span></div>
           <button id="dp-close" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button>
         </div>
         <div id="dp-update-banner" style="display:none;margin:9px 0 12px;padding:12px;background:#fff4df;border:1px solid #edc875;border-radius:11px;color:#6e4700;font-size:13px"><div style="font-weight:800;font-size:14px">🔄 Nouvelle version disponible</div><div style="margin:5px 0 10px">Version <b data-new-version></b> disponible. Vous pouvez continuer à utiliser l'outil en attendant.</div><div style="margin:0 0 10px;padding:9px;background:#fffaf0;border-radius:7px;line-height:1.5"><b>Comment faire ?</b> Cliquez ci-dessous, puis dans la page Tampermonkey qui va s'afficher, cliquez sur <b>« Mettre à jour »</b> pour confirmer, Après la mise à jour, revenez sur l'onglet Dynacad si nécessaire pour terminer l'installation. La page s'actualisera automatiquement et l'outil se rouvrira.</div><button type="button" style="width:100%;padding:11px;background:#a96508;color:white;border:0;border-radius:9px;font-weight:800;font-size:14px;cursor:pointer">⬇ Mettre à jour maintenant</button></div>
@@ -282,6 +282,12 @@ function stat(event) {
         </div>
         <button id="dp-scan" style="width:100%;height:58px;margin-top:7px;padding:10px;background:#172033;color:white;border:0;
           border-radius:11px;font-weight:bold;font-size:18px;cursor:pointer">📷 Scanner un code-barres</button>
+        <div style="display:flex;gap:7px;margin-top:7px">
+          <button id="dp-photo" type="button" style="flex:1;padding:11px 5px;background:white;border:1px solid #aeb9c9;border-radius:9px;font-weight:bold;cursor:pointer">🖼️ Importer une photo</button>
+          <button id="dp-photo-camera" type="button" style="flex:1;padding:11px 5px;background:white;border:1px solid #aeb9c9;border-radius:9px;font-weight:bold;cursor:pointer">📸 Prendre une photo</button>
+        </div>
+        <input id="dp-photo-file" type="file" accept="image/*" style="display:none">
+        <input id="dp-photo-capture" type="file" accept="image/*" capture="environment" style="display:none">
         <details id="dp-barcode-box" style="display:none;margin-top:8px;border:1px solid #d7dde6;border-radius:10px;background:#fff">
           <summary style="padding:10px 12px;font-weight:bold;cursor:pointer">▤ Afficher le code-barres de cet EAN</summary>
           <div style="padding:4px 12px 12px">
@@ -424,6 +430,14 @@ function stat(event) {
     document.getElementById("dp-search").onclick = searchProduct;
     document.getElementById("dp-label").onclick = () => openProductInDynacad();
     document.getElementById("dp-scan").onclick = startScanner;
+    document.getElementById("dp-photo").onclick = () => document.getElementById("dp-photo-file").click();
+    document.getElementById("dp-photo-camera").onclick = () => document.getElementById("dp-photo-capture").click();
+    for (const id of ["dp-photo-file","dp-photo-capture"]) {
+      document.getElementById(id).addEventListener("change",async e=>{
+        const file=e.target.files?.[0];e.target.value="";
+        if(file)await scanPhoto(file);
+      });
+    }
     document.getElementById("dp-barcode-box").addEventListener("toggle", e => { if (e.currentTarget.open) renderBarcode(); });
     const eanInput = document.getElementById("dp-ean");
     const eanClear = document.getElementById("dp-ean-clear");
@@ -627,6 +641,68 @@ function stat(event) {
     if (box) box.style.display = "none";
   }
 
+  async function scanPhoto(file) {
+    const status=document.getElementById("dp-status");
+    if(!("BarcodeDetector" in window)){
+      status.style.color="#b00020";
+      status.textContent="⚠ Lecture des photos non prise en charge par ce navigateur.";
+      return;
+    }
+    stopScanner();
+    status.style.color="#687386";
+    status.textContent="Analyse du code-barres sur la photo…";
+    let bitmap=null,url=null;
+    try {
+      const supported=await BarcodeDetector.getSupportedFormats();
+      const formats=["ean_13","ean_8","upc_a","upc_e"].filter(x=>supported.includes(x));
+      if(!formats.length)throw new Error("Format EAN/UPC non pris en charge.");
+      const detector=new BarcodeDetector({formats});
+      let source,width,height;
+      if(typeof createImageBitmap==="function")try{bitmap=await createImageBitmap(file)}catch(_){}
+      if(bitmap){source=bitmap;width=bitmap.width;height=bitmap.height}
+      else{
+        url=URL.createObjectURL(file);
+        const img=new Image();img.src=url;await img.decode();
+        source=img;width=img.naturalWidth;height=img.naturalHeight;
+      }
+      if(!width||!height)throw new Error("Image illisible.");
+      let hit=null;
+      for(const variant of [{max:2400,crop:false},{max:1400,crop:false},{max:2000,crop:true}]){
+        const sx=variant.crop?Math.floor(width*.08):0;
+        const sy=variant.crop?Math.floor(height*.2):0;
+        const sw=variant.crop?Math.floor(width*.84):width;
+        const sh=variant.crop?Math.floor(height*.6):height;
+        const scale=Math.min(1,variant.max/Math.max(sw,sh));
+        const canvas=document.createElement("canvas");
+        canvas.width=Math.max(1,Math.round(sw*scale));
+        canvas.height=Math.max(1,Math.round(sh*scale));
+        const ctx=canvas.getContext("2d");
+        if(!ctx)throw new Error("Impossible de traiter l'image.");
+        ctx.drawImage(source,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+        const codes=await detector.detect(canvas);
+        hit=codes.find(c=>/^\d{8,14}$/.test(c.rawValue||""));
+        if(hit)break;
+      }
+      if(!hit){
+        status.style.color="#b00020";
+        status.textContent="⚠ Aucun code-barres lisible. Essayez une photo nette et bien éclairée.";
+        return;
+      }
+      scanFeedback();stat("scan");
+      document.getElementById("dp-ean").value=hit.rawValue;
+      document.getElementById("dp-ean").dispatchEvent(new Event("input",{bubbles:true}));
+      status.style.color="green";
+      status.textContent="✓ Code-barres détecté sur la photo : "+hit.rawValue;
+      await searchProduct();
+    }catch(err){
+      status.style.color="#b00020";
+      status.textContent="⚠ Lecture de photo impossible : "+(err?.message||"image non reconnue");
+    }finally{
+      if(bitmap)bitmap.close();
+      if(url)URL.revokeObjectURL(url);
+    }
+  }
+
   async function startScanner() {
     const status = document.getElementById("dp-status");
     try {
@@ -642,12 +718,23 @@ function stat(event) {
       const wanted = ["ean_13", "ean_8", "upc_a", "upc_e"].filter(f => supported.includes(f));
       const detector = new BarcodeDetector({ formats: wanted.length ? wanted : undefined });
       cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } }, audio: false
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 24, max: 30 }
+        }, audio: false
       });
 
       torchTrack = cameraStream.getVideoTracks()[0] || null;
       const torchBtn = document.getElementById("dp-torch");
       if (torchTrack) {
+        try {
+          const focusCaps=torchTrack.getCapabilities?.()||{};
+          if(Array.isArray(focusCaps.focusMode)&&focusCaps.focusMode.includes("continuous")){
+            await torchTrack.applyConstraints({advanced:[{focusMode:"continuous"}]});
+          }
+        }catch(_){/* Autofocus indisponible : conserver le scanner. */}
         const caps = typeof torchTrack.getCapabilities === "function" ? torchTrack.getCapabilities() : {};
         if (caps.torch) {
           torchBtn.style.display = "block";
